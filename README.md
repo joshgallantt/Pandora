@@ -1,6 +1,6 @@
 <div align="center">
 
-<h1>Pandora</h1>
+<img src="Image/pandora.png" alt="Pandora" width="300" />
 
 > “Zeus gave man Pandora, a beautiful evil … and from her jar flowed every misfortune that haunts humanity, leaving only hope left inside.”
 >
