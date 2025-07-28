@@ -4,7 +4,7 @@
 
 > “Zeus gave man Pandora, a beautiful evil … and from her jar flowed every misfortune that haunts humanity, leaving only hope left inside.”
 >
-> — Aeschylus
+> - Aeschylus
 
 [![Platforms](https://img.shields.io/badge/Platforms-iOS%2016%2B%20%7C%20iPadOS%2016%2B%20%7C%20macOS%2014%2B%20%7C%20watchOS%209%2B%20%7C%20tvOS%2016%2B%20%7C%20visionOS%201%2B-blue.svg?style=flat)](#requirements)
 <br>
@@ -270,16 +270,20 @@ All Pandora cache types are designed for concurrent access:
 **1. Create your repository and initialise the Cache**
 
 ```Swift
+import Pandora
 import Combine
 
 final class WishlistRepository {
-    private let cache: DefaultMemoryBox<String, Set<String>>
+    private let cache: PandoraMemoryBox<String, Set<String>>
     private let service: WishlistService
     private let wishlistKey = "wishlist"
 
-    init(cache: ObservableMemoryCache<String, Set<String>>, service: WishlistService) {
-        self.cache = cache
+    init(service: WishlistService) {
         self.service = service
+        self.cache = Pandora.Memory.box(
+            maxSize: 1000,
+            expiresAfter: 3600 // 1 hour TTL
+        )
     }
 
     func observeIsWishlisted(productID: String) -> AnyPublisher<Bool, Never> {
@@ -290,12 +294,12 @@ final class WishlistRepository {
 
     func addToWishlist(productID: String) async throws {
         let updatedIDs = try await service.addProduct(productID: productID)
-        cache.put(wishlistKey, value: Set(updatedIDs))
+        cache.put(key: wishlistKey, value: Set(updatedIDs))
     }
 
     func removeFromWishlist(productID: String) async throws {
         let updatedIDs = try await service.removeProduct(productID: productID)
-        cache.put(wishlistKey, value: Set(updatedIDs))
+        cache.put(key: wishlistKey, value: Set(updatedIDs))
     }
 }
 ```
