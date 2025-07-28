@@ -14,7 +14,7 @@
 [![Coverage](https://img.shields.io/badge/Coverage-98%25-brightgreen.svg?style=flat)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-A powerful, type-safe caching library for iOS that provides multiple storage strategies with a unified API. Built with Swift Concurrency, Combine integration, and modern Swift best practices.
+A powerful, type-safe caching library for Swift that provides multiple storage strategies with a unified API. Built with Swift Concurrency, Combine integration, and modern Swift best practices.
 
 </div>
 
