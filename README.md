@@ -242,9 +242,7 @@ cache.publisher(for: "user_id")
     .store(in: &cancellables)
 ```
 
-## Cache Management
-
-### Cleanup Operations
+### Cache Cleanup
 
 ```swift
 // Clear specific cache
