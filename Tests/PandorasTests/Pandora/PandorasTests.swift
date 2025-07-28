@@ -28,6 +28,7 @@ final class PandorasTests: XCTestCase {
 
         // Then
         XCTAssertEqual(result, user)
+        
     }
 
     func test_memoryBox_explicit_types() {

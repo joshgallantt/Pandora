@@ -1,6 +1,7 @@
-<div align="center">
-
 <h1>Pandoras</h1>
+
+> “Zeus gave man Pandora, a beautiful evil … and from her jar flowed every misfortune that haunts humanity, leaving only hope left inside.”
+> — Aeschylus
 
 [![Platforms](https://img.shields.io/badge/Platforms-iOS%2016%2B%20%7C%20iPadOS%2016%2B%20%7C%20macOS%2014%2B%20%7C%20watchOS%209%2B%20%7C%20tvOS%2016%2B%20%7C%20visionOS%201%2B-blue.svg?style=flat)](#requirements)
 <br>
@@ -10,210 +11,254 @@
 [![Coverage](https://img.shields.io/badge/Coverage-98%25-brightgreen.svg?style=flat)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-</div>
-
-A modern, type-safe Swift package providing thread-safe caching and storage solutions with comprehensive expiry, LRU eviction, and reactive observation capabilities.
-
-## Overview
-
-Pandoras offers four specialized storage "boxes" that can be used individually or combined to create powerful caching architectures:
-
-- **MemoryBox** - Fast, in-memory caching with LRU eviction and TTL support
-- **DiskBox** - Persistent disk storage with namespace isolation and file-based caching
-- **UserDefaultsBox** - Type-safe UserDefaults wrapper with async/await support
-- **HybridBox** - Combines memory and disk storage for optimal performance and persistence
+A powerful, type-safe caching library for iOS that provides multiple storage strategies with a unified API. Built with Swift Concurrency, Combine integration, and modern Swift best practices.
 
 ## Features
 
-- ✅ **Type Safety** - Full generic support with Codable constraints where needed
-- ✅ **Thread Safety** - All components are designed for concurrent access
-- ✅ **Reactive** - Combine publishers for real-time value observation
-- ✅ **Expiry Support** - Global and per-key TTL with automatic cleanup
-- ✅ **LRU Eviction** - Configurable size limits with least-recently-used eviction
-- ✅ **Namespace Isolation** - Prevent key collisions across different use cases
-- ✅ **Actor Isolation** - Modern Swift concurrency patterns for disk operations
-- ✅ **Comprehensive Testing** - Extensive test coverage with mocks for easy testing
+✨ **Multiple Storage Strategies**
+- **Memory Cache**: Fast in-memory storage with LRU eviction
+- **Disk Cache**: Persistent file-based storage with actor isolation
+- **Hybrid Cache**: Combines memory and disk for optimal performance
+- **UserDefaults Cache**: Simple key-value storage with type safety
+
+🚀 **Modern Swift**
+- Built with Swift Concurrency (async/await)
+- Actor isolation for thread safety
+- Combine publishers for reactive programming
+- Generic types with full type safety
+
+⚡ **Performance & Features**
+- LRU (Least Recently Used) eviction policies
+- Configurable TTL (Time To Live) expiration
+- Namespace isolation for multi-cache scenarios
+- Automatic cleanup and memory management
 
 ## Installation
 
 ### Swift Package Manager
 
-Add Pandoras to your `Package.swift`:
+Add Pandoras to your project using Xcode or by adding it to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/yourusername/Pandoras.git", from: "1.0.0")
+    .package(url: "https://github.com/yourusername/pandoras-cache.git", from: "1.0.0")
 ]
 ```
 
-Or add it through Xcode:
-1. File → Add Package Dependencies
-2. Enter: `https://github.com/yourusername/Pandoras.git`
-
 ## Quick Start
-
-### Memory Caching
 
 ```swift
 import Pandoras
 
-// Create an in-memory cache with 100 item limit and 5-minute TTL
-let cache = DefaultMemoryBox<String, User>(maxSize: 100, expiresAfter: 300)
+// Memory cache for fast access (explicit type annotation)
+let memoryCache: PandorasMemoryBox<String, User> = Pandoras.Memory.box()
+memoryCache.put(key: "user123", value: user)
+let cachedUser = memoryCache.get("user123")
 
-// Store a value
-cache.put("user123", value: user)
+// Disk cache for persistence (type casting)
+let diskCache = Pandoras.Disk.box(namespace: "users") as PandorasDiskBox<String, User>
+await diskCache.put(key: "user123", value: user)
+let persistedUser = await diskCache.get("user123")
 
-// Retrieve a value
-let user = cache.get("user123")
-
-// Observe changes with Combine
-cache.publisher(for: "user123")
-    .sink { user in
-        print("User updated: \(user)")
-    }
-    .store(in: &cancellables)
+// Hybrid cache for best of both worlds (explicit type annotation)
+let hybridCache: PandorasHybridBox<String, User> = Pandoras.Hybrid.box(namespace: "users")
+hybridCache.put(key: "user123", value: user)
+let hybridUser = await hybridCache.get("user123")
 ```
 
-### Disk Storage
+## Cache Types
+
+### Memory Cache
+
+Perfect for frequently accessed data that doesn't need persistence.
 
 ```swift
-// Create a disk-backed cache with namespace isolation
-let diskCache = DefaultDiskBox<String, UserProfile>(
-    namespace: "user-profiles",
+// Option 1: Explicit type annotation
+let cache: PandorasMemoryBox<String, Data> = Pandoras.Memory.box(
+    maxSize: 1000,
+    expiresAfter: 3600 // 1 hour TTL
+)
+
+// Option 2: Using explicit type parameters
+let cache = Pandoras.Memory.box(
+    keyType: String.self,
+    valueType: Data.self,
     maxSize: 1000,
     expiresAfter: 3600
 )
 
-// Store with custom expiry
-await diskCache.put("profile456", value: profile, expiresAfter: 1800)
+// Store data
+cache.put(key: "image_thumbnail", value: imageData)
 
-// Retrieve
-let profile = await diskCache.get("profile456")
+// Retrieve data
+if let data = cache.get("image_thumbnail") {
+    // Use cached data
+}
 
-// Clear all data for this namespace
+// Observe changes with Combine
+cache.publisher(for: "image_thumbnail")
+    .sink { data in
+        // React to cache changes
+    }
+    .store(in: &cancellables)
+```
+
+### Disk Cache
+
+Actor-isolated persistent storage for data that survives app restarts.
+
+```swift
+// Option 1: Type casting
+let diskCache = Pandoras.Disk.box(
+    namespace: "user_profiles",
+    maxSize: 10000,
+    expiresAfter: 86400 // 24 hours
+) as PandorasDiskBox<String, UserProfile>
+
+// Option 2: Using explicit type parameters
+let diskCache = Pandoras.Disk.box(
+    namespace: "user_profiles",
+    keyType: String.self,
+    valueType: UserProfile.self,
+    maxSize: 10000,
+    expiresAfter: 86400
+)
+
+// All operations are async
+await diskCache.put(key: "profile_123", value: userProfile)
+let profile = await diskCache.get("profile_123")
+await diskCache.remove("profile_123")
 await diskCache.clear()
 ```
 
-### UserDefaults Storage
+### Hybrid Cache
+
+Combines memory and disk caching for optimal performance and persistence.
 
 ```swift
-// Type-safe UserDefaults wrapper
-let settings = DefaultUserDefaultsBox(namespace: "app-settings")
-
-// Store any Codable type
-try await settings.put(userPreferences, forKey: "preferences")
-
-// Retrieve with strong typing
-let preferences: UserPreferences = try await settings.get(forKey: "preferences")
-
-// Check existence
-let hasPrefs = await settings.contains("preferences")
-```
-
-### Hybrid Storage (Best of Both Worlds)
-
-```swift
-// Combines fast memory access with persistent disk storage
-let hybridCache = DefaultHybridBox<String, APIResponse>(
-    namespace: "api-cache",
-    memoryMaxSize: 50,           // Keep 50 items in memory
-    memoryExpiresAfter: 300,     // Memory TTL: 5 minutes
-    diskMaxSize: 500,            // Keep 500 items on disk
-    diskExpiresAfter: 3600       // Disk TTL: 1 hour
+// Option 1: Explicit type annotation
+let hybridCache: PandorasHybridBox<String, APIResponse> = Pandoras.Hybrid.box(
+    namespace: "api_cache",
+    memoryMaxSize: 500,        // Fast memory access
+    memoryExpiresAfter: 300,   // 5 minutes in memory
+    diskMaxSize: 5000,         // Persistent storage
+    diskExpiresAfter: 3600     // 1 hour on disk
 )
 
-// Store once - goes to both memory and disk
-hybridCache.put("api/users", value: response)
+// Option 2: Using explicit type parameters
+let hybridCache = Pandoras.Hybrid.box(
+    namespace: "api_cache",
+    keyType: String.self,
+    valueType: APIResponse.self,
+    memoryMaxSize: 500,
+    memoryExpiresAfter: 300,
+    diskMaxSize: 5000,
+    diskExpiresAfter: 3600
+)
 
-// Fast retrieval - checks memory first, then disk
-let response = await hybridCache.get("api/users")
+// Stores in memory immediately, writes to disk asynchronously
+hybridCache.put(key: "api_response", value: response)
 
-// Reactive observation
-hybridCache.publisher(for: "api/users")
-    .compactMap { $0 }
+// Checks memory first, falls back to disk
+let cachedResponse = await hybridCache.get("api_response")
+
+// Observe memory changes
+hybridCache.publisher(for: "api_response")
     .sink { response in
         updateUI(with: response)
     }
+    .store(in: &cancellables)
+```
+
+### UserDefaults Cache
+
+Type-safe UserDefaults storage with namespace isolation.
+
+```swift
+let settingsCache = Pandoras.UserDefaults.box(namespace: "app_settings")
+
+// Store various types safely
+try await settingsCache.put(key: "username", value: "john_doe")
+try await settingsCache.put(key: "darkMode", value: true)
+try await settingsCache.put(key: "lastSync", value: Date())
+
+// Retrieve with full type safety
+let username: String = try await settingsCache.get("username")
+let isDarkMode: Bool = try await settingsCache.get("darkMode")
+let lastSync: Date = try await settingsCache.get("lastSync")
 ```
 
 ## Advanced Usage
 
-### Custom Expiry Per Key
+### Custom Expiration Per Key
 
 ```swift
-// Global TTL with per-key overrides
-let cache = DefaultMemoryBox<String, Data>(expiresAfter: 3600)
+// Explicit type annotation required
+let cache: PandorasMemoryBox<String, Data> = Pandoras.Memory.box()
 
-// This item expires in 10 minutes instead of 1 hour
-cache.put("short-lived", value: data, expiresAfter: 600)
+// Store with custom TTL
+cache.put(
+    key: "short_lived_data", 
+    value: data, 
+    expiresAfter: 60 // 1 minute
+)
 
-// This item never expires (overrides global TTL)
-cache.put("permanent", value: data, expiresAfter: 0)
+// Store without expiration (overrides global TTL)
+cache.put(
+    key: "permanent_data", 
+    value: data, 
+    expiresAfter: nil
+)
 ```
 
-### Namespace Isolation
+### Reactive Programming with Combine
 
 ```swift
-// Different namespaces prevent key collisions
-let userCache = DefaultDiskBox<String, User>(namespace: "users")
-let postCache = DefaultDiskBox<String, Post>(namespace: "posts")
+// Explicit type annotation required
+let cache: PandorasMemoryBox<String, User> = Pandoras.Memory.box()
 
-// These don't interfere with each other
-await userCache.put("123", value: user)
-await postCache.put("123", value: post)
-```
-
-### Reactive Programming
-
-```swift
-// Observe multiple keys
-let userPublisher = cache.publisher(for: "current-user")
-let settingsPublisher = cache.publisher(for: "user-settings")
-
-Publishers.CombineLatest(userPublisher, settingsPublisher)
-    .compactMap { user, settings in
-        guard let user = user, let settings = settings else { return nil }
-        return (user, settings)
+// Observe specific keys
+cache.publisher(for: "current_user")
+    .compactMap { $0 } // Filter out nil values
+    .sink { user in
+        print("User updated: \(user.name)")
     }
-    .sink { user, settings in
-        configureApp(for: user, with: settings)
+    .store(in: &cancellables)
+
+// Chain multiple cache operations
+cache.publisher(for: "user_id")
+    .compactMap { $0 }
+    .flatMap { userId in
+        fetchUserDetails(userId)
     }
+    .sink { userDetails in
+        // Handle user details
+    }
+    .store(in: &cancellables)
 ```
 
-### Testing Support
+## Cache Management
 
-Pandoras includes mock implementations for easy testing:
+### Cleanup Operations
 
 ```swift
-// Use mocks in your tests
-let mockCache = MockMemoryBox<String, TestData>()
-let mockDisk = MockDiskBox<String, TestData>()
-let mockHybrid = MockHybridBox<String, TestData>()
+// Clear specific cache
+cache.clear()
+await diskCache.clear()
 
-// Inject mocks into your classes
-class DataManager {
-    let cache: any MemoryBox<String, APIResponse>
-    
-    init(cache: any MemoryBox<String, APIResponse> = DefaultMemoryBox()) {
-        self.cache = cache
-    }
-}
-
-// Test with mock
-let manager = DataManager(cache: mockCache)
+// Remove all disk cache data across all namespaces
+Pandoras.clearAllDiskData()
 ```
 
+## Thread Safety
 
-## Global Cache Management
+All Pandoras cache types are designed for concurrent access:
 
-```swift
-// Clear all disk caches across the entire app
-DefaultDiskBox<String, Any>.clearAll()
-DefaultHybridBox<String, Any>.clearAll()
+- **Memory Cache**: Thread-safe with internal locking
+- **Disk Cache**: Actor-isolated for async safety
+- **Hybrid Cache**: Combines both safety models
+- **UserDefaults Cache**: Actor-isolated async operations
 
-// Per-instance clearing
-await specificCache.clear()
-```
 
 ## Clean Architecture Example Usage
 
@@ -343,8 +388,8 @@ final class WishlistButtonViewModel: ObservableObject {
 
 ## License
 
-Pandoras is available under the MIT license. See the [LICENSE](LICENSE) file for more info.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Credits
+----
 
 Created with ❤️ by Josh Gallant - for the Swift community.
