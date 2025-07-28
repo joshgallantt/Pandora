@@ -1,4 +1,6 @@
-<h1>Pandoras</h1>
+<div align="center">
+
+<h1>Pandora</h1>
 
 > “Zeus gave man Pandora, a beautiful evil … and from her jar flowed every misfortune that haunts humanity, leaving only hope left inside.”
 > — Aeschylus
@@ -12,6 +14,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 A powerful, type-safe caching library for iOS that provides multiple storage strategies with a unified API. Built with Swift Concurrency, Combine integration, and modern Swift best practices.
+
+</div>
 
 ## Features
 
@@ -37,7 +41,7 @@ A powerful, type-safe caching library for iOS that provides multiple storage str
 
 ### Swift Package Manager
 
-Add Pandoras to your project using Xcode or by adding it to your `Package.swift`:
+Add Pandora to your project using Xcode or by adding it to your `Package.swift`:
 
 ```swift
 dependencies: [
@@ -48,20 +52,20 @@ dependencies: [
 ## Quick Start
 
 ```swift
-import Pandoras
+import Pandora
 
 // Memory cache for fast access (explicit type annotation)
-let memoryCache: PandorasMemoryBox<String, User> = Pandoras.Memory.box()
+let memoryCache: PandoraMemoryBox<String, User> = Pandora.Memory.box()
 memoryCache.put(key: "user123", value: user)
 let cachedUser = memoryCache.get("user123")
 
 // Disk cache for persistence (type casting)
-let diskCache = Pandoras.Disk.box(namespace: "users") as PandorasDiskBox<String, User>
+let diskCache = Pandora.Disk.box(namespace: "users") as PandoraDiskBox<String, User>
 await diskCache.put(key: "user123", value: user)
 let persistedUser = await diskCache.get("user123")
 
 // Hybrid cache for best of both worlds (explicit type annotation)
-let hybridCache: PandorasHybridBox<String, User> = Pandoras.Hybrid.box(namespace: "users")
+let hybridCache: PandoraHybridBox<String, User> = Pandora.Hybrid.box(namespace: "users")
 hybridCache.put(key: "user123", value: user)
 let hybridUser = await hybridCache.get("user123")
 ```
@@ -74,13 +78,13 @@ Perfect for frequently accessed data that doesn't need persistence.
 
 ```swift
 // Option 1: Explicit type annotation
-let cache: PandorasMemoryBox<String, Data> = Pandoras.Memory.box(
+let cache: PandoraMemoryBox<String, Data> = Pandora.Memory.box(
     maxSize: 1000,
     expiresAfter: 3600 // 1 hour TTL
 )
 
 // Option 2: Using explicit type parameters
-let cache = Pandoras.Memory.box(
+let cache = Pandora.Memory.box(
     keyType: String.self,
     valueType: Data.self,
     maxSize: 1000,
@@ -109,14 +113,14 @@ Actor-isolated persistent storage for data that survives app restarts.
 
 ```swift
 // Option 1: Type casting
-let diskCache = Pandoras.Disk.box(
+let diskCache = Pandora.Disk.box(
     namespace: "user_profiles",
     maxSize: 10000,
     expiresAfter: 86400 // 24 hours
-) as PandorasDiskBox<String, UserProfile>
+) as PandoraDiskBox<String, UserProfile>
 
 // Option 2: Using explicit type parameters
-let diskCache = Pandoras.Disk.box(
+let diskCache = Pandora.Disk.box(
     namespace: "user_profiles",
     keyType: String.self,
     valueType: UserProfile.self,
@@ -137,7 +141,7 @@ Combines memory and disk caching for optimal performance and persistence.
 
 ```swift
 // Option 1: Explicit type annotation
-let hybridCache: PandorasHybridBox<String, APIResponse> = Pandoras.Hybrid.box(
+let hybridCache: PandoraHybridBox<String, APIResponse> = Pandora.Hybrid.box(
     namespace: "api_cache",
     memoryMaxSize: 500,        // Fast memory access
     memoryExpiresAfter: 300,   // 5 minutes in memory
@@ -146,7 +150,7 @@ let hybridCache: PandorasHybridBox<String, APIResponse> = Pandoras.Hybrid.box(
 )
 
 // Option 2: Using explicit type parameters
-let hybridCache = Pandoras.Hybrid.box(
+let hybridCache = Pandora.Hybrid.box(
     namespace: "api_cache",
     keyType: String.self,
     valueType: APIResponse.self,
@@ -175,7 +179,7 @@ hybridCache.publisher(for: "api_response")
 Type-safe UserDefaults storage with namespace isolation.
 
 ```swift
-let settingsCache = Pandoras.UserDefaults.box(namespace: "app_settings")
+let settingsCache = Pandora.UserDefaults.box(namespace: "app_settings")
 
 // Store various types safely
 try await settingsCache.put(key: "username", value: "john_doe")
@@ -194,7 +198,7 @@ let lastSync: Date = try await settingsCache.get("lastSync")
 
 ```swift
 // Explicit type annotation required
-let cache: PandorasMemoryBox<String, Data> = Pandoras.Memory.box()
+let cache: PandoraMemoryBox<String, Data> = Pandora.Memory.box()
 
 // Store with custom TTL
 cache.put(
@@ -215,7 +219,7 @@ cache.put(
 
 ```swift
 // Explicit type annotation required
-let cache: PandorasMemoryBox<String, User> = Pandoras.Memory.box()
+let cache: PandoraMemoryBox<String, User> = Pandora.Memory.box()
 
 // Observe specific keys
 cache.publisher(for: "current_user")
@@ -247,12 +251,12 @@ cache.clear()
 await diskCache.clear()
 
 // Remove all disk cache data across all namespaces
-Pandoras.clearAllDiskData()
+Pandora.clearAllDiskData()
 ```
 
 ## Thread Safety
 
-All Pandoras cache types are designed for concurrent access:
+All Pandora cache types are designed for concurrent access:
 
 - **Memory Cache**: Thread-safe with internal locking
 - **Disk Cache**: Actor-isolated for async safety

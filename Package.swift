@@ -3,7 +3,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "Pandoras",
+    name: "Pandora",
     platforms: [
         .iOS(.v16),
         .macOS(.v14),
@@ -13,17 +13,17 @@ let package = Package(
     ],
     products: [
         .library(
-            name: "Pandoras",
-            targets: ["Pandoras"]
+            name: "Pandora",
+            targets: ["Pandora"]
         ),
     ],
     targets: [
         .target(
-            name: "Pandoras"
+            name: "Pandora"
         ),
         .testTarget(
-            name: "PandorasTests",
-            dependencies: ["Pandoras"]
+            name: "PandoraTests",
+            dependencies: ["Pandora"]
         ),
     ]
 )
