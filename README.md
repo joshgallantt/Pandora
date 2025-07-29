@@ -175,8 +175,6 @@ let box: PandoraMemoryBox<String, User> = Pandora.Memory.box()
 
 ### 2. Type Casting
 
-Useful when you don't want to annotate the variable, but know the types:
-
 ```swift
 let box = Pandora.Memory.box() as PandoraMemoryBox<String, User>
 ```
@@ -192,7 +190,8 @@ let box = Pandora.Memory.box(
 )
 ```
 
-[!TIP] This is especially useful inside generic or factory contexts where the return type isn’t obvious.
+> [!TIP]
+> This is especially useful inside generic or factory contexts where the return type isn’t obvious.
 
 ## Advanced Usage
 
