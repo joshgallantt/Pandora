@@ -10,20 +10,34 @@ import Foundation
 public enum Pandora {
     
     // MARK: - Memory
-    
+
     public enum Memory {
-        /// Creates an in-memory cache box with optional maximum size and expiration.
+        /// Returns an in-memory cache box.
         ///
-        /// This cache stores key-value pairs entirely in memory.
+        /// Stores key-value pairs entirely in memory, with optional size and expiration limits.
         ///
         /// - Parameters:
-        ///   - maxSize: The maximum number of elements to store before evicting oldest items. Default is 500.
-        ///   - expiresAfter: Optional time interval after which cached items expire.
-        /// - Returns: A `PandoraMemoryBox` instance for caching in memory.
+        ///   - maxSize: Maximum number of items before evicting the oldest. Default is 500.
+        ///   - expiresAfter: Optional expiration interval for each item.
+        /// - Returns: A `PandoraMemoryBox` instance.
         ///
+        /// ### Type Inference Examples
         /// ```swift
-        /// let cache = Pandora.Memory.box(maxSize: 1000, expiresAfter: 3600)
-        /// cache.set("value", forKey: "key")
+        /// struct TestUser: Codable, Equatable {
+        ///     let id: Int
+        ///     let name: String
+        /// }
+        ///
+        /// // 1. Inference-based
+        /// let box: PandoraMemoryBox<String, TestUser> = Pandora.Memory.box()
+        ///
+        /// // 2. Explicit cast
+        /// let box = Pandora.Memory.box() as PandoraMemoryBox<String, TestUser>
+        ///
+        /// // 3. Explicit types
+        /// let box = Pandora.Memory.box(keyType: String.self, valueType: TestUser.self)
+        ///
+        /// box.set(key: "user", value: TestUser(id: 1, name: "Alice"))
         /// ```
         public static func box<Key: Hashable, Value>(
             maxSize: Int = 500,
@@ -31,21 +45,27 @@ public enum Pandora {
         ) -> PandoraMemoryBox<Key, Value> {
             PandoraMemoryBox(maxSize: maxSize, expiresAfter: expiresAfter)
         }
-        
-        /// Creates an in-memory cache box with explicit key and value types.
+
+        /// Returns an in-memory cache box with explicit key and value types.
         ///
-        /// Use this method as a fallback when Swift's type inference does not work.
+        /// Useful when type inference fails—for example, when the return type isn't declared or can't be inferred.
         ///
         /// - Parameters:
-        ///   - keyType: Explicit key type.
-        ///   - valueType: Explicit value type.
-        ///   - maxSize: The maximum number of elements to store before evicting oldest items. Default is 500.
-        ///   - expiresAfter: Optional time interval after which cached items expire.
-        /// - Returns: A `PandoraMemoryBox` instance for caching in memory.
+        ///   - keyType: The key type (e.g., `String.self`).
+        ///   - valueType: The value type (e.g., `TestUser.self`).
+        ///   - maxSize: Maximum number of items. Default is 500.
+        ///   - expiresAfter: Optional expiration interval.
+        /// - Returns: A `PandoraMemoryBox` instance.
         ///
+        /// ### Example
         /// ```swift
-        /// let cache = Pandora.Memory.box(keyType: String.self, valueType: Int.self, maxSize: 100)
-        /// cache.set(123, forKey: "userId")
+        /// let box = Pandora.Memory.box(
+        ///     keyType: String.self,
+        ///     valueType: TestUser.self,
+        ///     maxSize: 100
+        /// )
+        ///
+        /// box.set(key: "user", value: TestUser(id: 1, name: "Explicit"))
         /// ```
         public static func box<Key: Hashable, Value>(
             keyType: Key.Type,
@@ -56,23 +76,37 @@ public enum Pandora {
             box(maxSize: maxSize, expiresAfter: expiresAfter)
         }
     }
-    
+
     // MARK: - Disk
 
     public enum Disk {
-        /// Creates a disk-backed cache box within a specified namespace.
+        /// Returns a disk-backed cache box.
         ///
-        /// Cached items are stored on disk and can optionally have size limits and expiration.
+        /// Stores items on disk under a unique namespace, with optional size and expiration limits.
         ///
         /// - Parameters:
-        ///   - namespace: The unique namespace for isolating cache data on disk.
-        ///   - maxSize: Optional maximum number of items to store on disk.
-        ///   - expiresAfter: Optional expiration time for cached items.
-        /// - Returns: A `PandoraDiskBox` instance for disk-backed caching.
+        ///   - namespace: Unique identifier for disk storage.
+        ///   - maxSize: Optional maximum item count.
+        ///   - expiresAfter: Optional expiration interval.
+        /// - Returns: A `PandoraDiskBox` instance.
         ///
+        /// ### Type Inference Examples
         /// ```swift
-        /// let diskCache = Pandora.Disk.box(namespace: "com.example.cache", maxSize: 10000)
-        /// diskCache.set(value, forKey: "userProfile")
+        /// struct TestUser: Codable, Equatable {
+        ///     let id: Int
+        ///     let name: String
+        /// }
+        ///
+        /// // 1. Inference-based
+        /// let box: PandoraDiskBox<String, TestUser> = Pandora.Disk.box(namespace: "disk1")
+        ///
+        /// // 2. Explicit cast
+        /// let box = Pandora.Disk.box(namespace: "disk2") as PandoraDiskBox<String, TestUser>
+        ///
+        /// // 3. Explicit types
+        /// let box = Pandora.Disk.box(namespace: "disk3", keyType: String.self, valueType: TestUser.self)
+        ///
+        /// await box.put(key: "user", value: TestUser(id: 2, name: "Bob"))
         /// ```
         public static func box<Key: Hashable, Value: Codable>(
             namespace: String,
@@ -81,22 +115,28 @@ public enum Pandora {
         ) -> PandoraDiskBox<Key, Value> {
             PandoraDiskBox(namespace: namespace, maxSize: maxSize, expiresAfter: expiresAfter)
         }
-        
-        /// Creates a disk-backed cache box with explicit key and value types.
+
+        /// Returns a disk-backed cache box with explicit key and value types.
         ///
-        /// Use this method as a fallback when Swift's type inference does not work.
+        /// Useful when type inference fails—for example, if the result isn’t assigned to a concrete variable type.
         ///
         /// - Parameters:
-        ///   - namespace: The unique namespace for isolating cache data on disk.
-        ///   - keyType: Explicit key type.
-        ///   - valueType: Explicit value type.
-        ///   - maxSize: Optional maximum number of items to store on disk.
-        ///   - expiresAfter: Optional expiration time for cached items.
-        /// - Returns: A `PandoraDiskBox` instance for disk-backed caching.
+        ///   - namespace: Unique identifier for disk storage.
+        ///   - keyType: The key type (e.g., `String.self`).
+        ///   - valueType: The value type (e.g., `TestUser.self`).
+        ///   - maxSize: Optional maximum item count.
+        ///   - expiresAfter: Optional expiration interval.
+        /// - Returns: A `PandoraDiskBox` instance.
         ///
+        /// ### Example
         /// ```swift
-        /// let diskCache = Pandora.Disk.box(namespace: "com.example.cache", keyType: String.self, valueType: Data.self)
-        /// diskCache.set(Data(), forKey: "blob")
+        /// let box = Pandora.Disk.box(
+        ///     namespace: "com.example.explicit",
+        ///     keyType: String.self,
+        ///     valueType: TestUser.self
+        /// )
+        ///
+        /// await box.put(key: "user", value: TestUser(id: 2, name: "ExplicitDisk"))
         /// ```
         public static func box<Key: Hashable, Value: Codable>(
             namespace: String,
@@ -112,21 +152,39 @@ public enum Pandora {
     // MARK: - Hybrid
 
     public enum Hybrid {
-        /// Creates a hybrid cache box that combines in-memory and disk caching.
+        /// Returns a hybrid cache box combining memory and disk.
         ///
-        /// This method leverages Swift's type inference when the destination type is explicit.
+        /// Stores items in memory and persists them to disk, with separate expiration and size controls.
         ///
         /// - Parameters:
-        ///   - namespace: The cache namespace to isolate data.
-        ///   - memoryMaxSize: Maximum number of items in memory cache. Default is 500.
-        ///   - memoryExpiresAfter: Optional expiration for memory cache items.
-        ///   - diskMaxSize: Optional maximum number of items in disk cache.
-        ///   - diskExpiresAfter: Optional expiration for disk cache items.
-        /// - Returns: A `PandoraHybridBox` combining memory and disk caching.
+        ///   - namespace: Cache namespace.
+        ///   - memoryMaxSize: Max items in memory. Default is 500.
+        ///   - memoryExpiresAfter: Optional memory expiration interval.
+        ///   - diskMaxSize: Optional max items on disk.
+        ///   - diskExpiresAfter: Optional disk expiration interval.
+        /// - Returns: A `PandoraHybridBox` instance.
         ///
+        /// ### Type Inference Examples
         /// ```swift
-        /// let hybridCache: PandoraHybridBox<String, String> = Pandora.Hybrid.box(namespace: "com.example.hybrid")
-        /// hybridCache.set("cachedValue", forKey: "key")
+        /// struct TestUser: Codable, Equatable {
+        ///     let id: Int
+        ///     let name: String
+        /// }
+        ///
+        /// // 1. Inference-based
+        /// let box: PandoraHybridBox<String, TestUser> = Pandora.Hybrid.box(namespace: "hybrid1")
+        ///
+        /// // 2. Explicit cast
+        /// let box = Pandora.Hybrid.box(namespace: "hybrid2") as PandoraHybridBox<String, TestUser>
+        ///
+        /// // 3. Explicit types
+        /// let box = Pandora.Hybrid.box(
+        ///     namespace: "hybrid3",
+        ///     keyType: String.self,
+        ///     valueType: TestUser.self
+        /// )
+        ///
+        /// box.put(key: "user", value: TestUser(id: 3, name: "Charlie"))
         /// ```
         public static func box<Key: Hashable & Sendable, Value: Codable & Sendable>(
             namespace: String,
@@ -144,26 +202,29 @@ public enum Pandora {
             )
         }
 
-        /// Creates a hybrid cache box with explicit key and value types.
+        /// Returns a hybrid cache box with explicit key and value types.
         ///
-        /// Use this method as a fallback when Swift's type inference does not work.
+        /// Useful when type inference fails or when constructing without assigning to a concrete type.
         ///
         /// - Parameters:
-        ///   - namespace: The cache namespace.
-        ///   - keyType: Explicit key type.
-        ///   - valueType: Explicit value type.
-        ///   - memoryMaxSize: Maximum items in memory cache. Default is 500.
-        ///   - memoryExpiresAfter: Optional expiration for memory cache items.
-        ///   - diskMaxSize: Optional maximum items in disk cache.
-        ///   - diskExpiresAfter: Optional expiration for disk cache items.
-        /// - Returns: A `PandoraHybridBox` configured with explicit types.
+        ///   - namespace: Cache namespace.
+        ///   - keyType: The key type (e.g., `String.self`).
+        ///   - valueType: The value type (e.g., `TestUser.self`).
+        ///   - memoryMaxSize: Max items in memory. Default is 500.
+        ///   - memoryExpiresAfter: Optional memory expiration interval.
+        ///   - diskMaxSize: Optional max items on disk.
+        ///   - diskExpiresAfter: Optional disk expiration interval.
+        /// - Returns: A `PandoraHybridBox` instance.
         ///
+        /// ### Example
         /// ```swift
-        /// let hybridCache = Pandora.Hybrid.box(
+        /// let box = Pandora.Hybrid.box(
         ///     namespace: "com.example.hybrid",
         ///     keyType: String.self,
-        ///     valueType: User.self
+        ///     valueType: TestUser.self
         /// )
+        ///
+        /// box.put(key: "user", value: TestUser(id: 3, name: "ExplicitHybrid"))
         /// ```
         public static func box<Key: Hashable & Sendable, Value: Codable & Sendable>(
             namespace: String,
@@ -187,18 +248,26 @@ public enum Pandora {
     // MARK: - UserDefaults
 
     public enum UserDefaults {
-        /// Creates a cache box backed by `UserDefaults`.
+        /// Returns a cache box backed by `UserDefaults`.
         ///
-        /// This cache stores values using the `UserDefaults` API, isolated by a namespace.
+        /// Keys are namespaced and values stored via `UserDefaults`.
         ///
         /// - Parameters:
-        ///   - namespace: The namespace to prefix keys in UserDefaults.
-        ///   - userDefaults: The `UserDefaults` instance to use. Defaults to `.standard`.
-        /// - Returns: A `PandoraUserDefaultsBox` instance for caching with UserDefaults.
+        ///   - namespace: Prefix used to isolate keys.
+        ///   - userDefaults: The backing store. Defaults to `.standard`.
+        /// - Returns: A `PandoraUserDefaultsBox` instance.
         ///
+        /// ### Type Usage Example
         /// ```swift
-        /// let userDefaultsCache = Pandora.UserDefaults.box(namespace: "com.example.settings")
-        /// userDefaultsCache.set("darkModeEnabled", forKey: "darkMode")
+        /// struct TestUser: Codable, Equatable {
+        ///     let id: Int
+        ///     let name: String
+        /// }
+        ///
+        /// let box = Pandora.UserDefaults.box(namespace: "user.defaults")
+        ///
+        /// try await box.put(key: "user", value: TestUser(id: 4, name: "Dora"))
+        /// let result: TestUser = try await box.get("user")
         /// ```
         public static func box(
             namespace: String,
@@ -210,11 +279,9 @@ public enum Pandora {
 
     // MARK: - Utilities
 
-    /// Removes all cached data stored on disk within the default disk cache root directory.
+    /// Deletes all disk cache data created by `Pandora.Disk` and `Pandora.Hybrid`.
     ///
-    /// Use this method to clear all disk cache data created by the Pandora Disk and Hybrid boxes.
-    ///
-    /// - Note: This operation is destructive and irreversible.
+    /// - Note: This is a destructive and irreversible operation.
     ///
     /// ```swift
     /// Pandora.clearAllDiskData()
@@ -223,4 +290,3 @@ public enum Pandora {
         try? FileManager.default.removeItem(at: PandoraDiskBoxPath.sharedRoot)
     }
 }
-

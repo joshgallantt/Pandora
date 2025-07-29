@@ -55,94 +55,75 @@ dependencies: [
 ```swift
 import Pandora
 
-// Memory cache for fast access (explicit type annotation)
-let memoryCache: PandoraMemoryBox<String, User> = Pandora.Memory.box()
-memoryCache.put(key: "user123", value: user)
-let cachedUser = memoryCache.get("user123")
+// Memory box for fast access
+let memoryBox: PandoraMemoryBox<String, User> = Pandora.Memory.box()
+memoryBox.put(key: "user123", value: user)
+let cachedUser = memoryBox.get("user123")
 
-// Disk cache for persistence (type casting)
-let diskCache = Pandora.Disk.box(namespace: "users") as PandoraDiskBox<String, User>
-await diskCache.put(key: "user123", value: user)
-let persistedUser = await diskCache.get("user123")
+// Disk box for persistence
+let diskBox: PandoraDiskBox<String, User> = Pandora.Disk.box(namespace: "users")
+await diskBox.put(key: "user123", value: user)
+let persistedUser = await diskBox.get("user123")
 
-// Hybrid cache for best of both worlds (explicit type annotation)
-let hybridCache: PandoraHybridBox<String, User> = Pandora.Hybrid.box(namespace: "users")
-hybridCache.put(key: "user123", value: user)
-let hybridUser = await hybridCache.get("user123")
-```
+// Hybrid box for best of both worlds
+let hybridBox: PandoraHybridBox<String, User> = Pandora.Hybrid.box(namespace: "users")
+hybridBox.put(key: "user123", value: user)
+let hybridUser = await hybridBox.get("user123")
+````
 
 ## Cache Types
 
-### Memory Cache
+### Memory Box
 
 Perfect for frequently accessed data that doesn't need persistence.
 
 ```swift
-// Option 1: Explicit type annotation
-let cache: PandoraMemoryBox<String, Data> = Pandora.Memory.box(
+let box: PandoraMemoryBox<String, Data> = Pandora.Memory.box(
     maxSize: 1000,
     expiresAfter: 3600 // 1 hour TTL
 )
 
-// Option 2: Using explicit type parameters
-let cache = Pandora.Memory.box(
-    keyType: String.self,
-    valueType: Data.self,
-    maxSize: 1000,
-    expiresAfter: 3600
-)
-
 // Store data
-cache.put(key: "image_thumbnail", value: imageData)
+box.put(key: "image_thumbnail", value: imageData)
 
 // Retrieve data
-if let data = cache.get("image_thumbnail") {
+if let data = box.get("image_thumbnail") {
     // Use cached data
 }
 
 // Observe changes with Combine
-cache.publisher(for: "image_thumbnail")
+box.publisher(for: "image_thumbnail")
     .sink { data in
-        // React to cache changes
+        // React to box changes
     }
     .store(in: &cancellables)
 ```
 
-### Disk Cache
+
+### Disk Box
 
 Actor-isolated persistent storage for data that survives app restarts.
 
 ```swift
-// Option 1: Type casting
-let diskCache = Pandora.Disk.box(
+let box: PandoraDiskBox<String, UserProfile> = Pandora.Disk.box(
     namespace: "user_profiles",
     maxSize: 10000,
     expiresAfter: 86400 // 24 hours
-) as PandoraDiskBox<String, UserProfile>
-
-// Option 2: Using explicit type parameters
-let diskCache = Pandora.Disk.box(
-    namespace: "user_profiles",
-    keyType: String.self,
-    valueType: UserProfile.self,
-    maxSize: 10000,
-    expiresAfter: 86400
 )
 
-// All operations are async
-await diskCache.put(key: "profile_123", value: userProfile)
-let profile = await diskCache.get("profile_123")
-await diskCache.remove("profile_123")
-await diskCache.clear()
+await box.put(key: "profile_123", value: userProfile)
+let profile = await box.get("profile_123")
+await box.remove("profile_123")
+await box.clear()
 ```
 
-### Hybrid Cache
 
-Combines memory and disk caching for optimal performance and persistence.
+### Hybrid Box
+
+Combines memory and disk storage for optimal performance and persistence.
 
 ```swift
-// Option 1: Explicit type annotation
-let hybridCache: PandoraHybridBox<String, APIResponse> = Pandora.Hybrid.box(
+let box: PandoraHybridBox<String, APIResponse> = Pandora.Hybrid.box(
     namespace: "api_cache",
     memoryMaxSize: 500,        // Fast memory access
     memoryExpiresAfter: 300,   // 5 minutes in memory
@@ -150,48 +131,68 @@ let hybridCache: PandoraHybridBox<String, APIResponse> = Pandora.Hybrid.box(
     diskExpiresAfter: 3600     // 1 hour on disk
 )
 
-// Option 2: Using explicit type parameters
-let hybridCache = Pandora.Hybrid.box(
-    namespace: "api_cache",
-    keyType: String.self,
-    valueType: APIResponse.self,
-    memoryMaxSize: 500,
-    memoryExpiresAfter: 300,
-    diskMaxSize: 5000,
-    diskExpiresAfter: 3600
-)
-
 // Stores in memory immediately, writes to disk asynchronously
-hybridCache.put(key: "api_response", value: response)
+box.put(key: "api_response", value: response)
 
-// Checks memory first, falls back to disk
-let cachedResponse = await hybridCache.get("api_response")
+// Checks memory first, falls back to disk, memory is rehydrated.
+let cachedResponse = await box.get("api_response")
 
 // Observe memory changes
-hybridCache.publisher(for: "api_response")
+box.publisher(for: "api_response")
     .sink { response in
         updateUI(with: response)
     }
     .store(in: &cancellables)
 ```
 
-### UserDefaults Cache
 
-Type-safe UserDefaults storage with namespace isolation.
+### UserDefaults Box
+
+Type-safe `UserDefaults` storage with namespace isolation.
 
 ```swift
-let settingsCache = Pandora.UserDefaults.box(namespace: "app_settings")
+let box = Pandora.UserDefaults.box(namespace: "app_settings")
 
-// Store various types safely
-try await settingsCache.put(key: "username", value: "john_doe")
-try await settingsCache.put(key: "darkMode", value: true)
-try await settingsCache.put(key: "lastSync", value: Date())
+try await box.put(key: "username", value: "john_doe")
+try await box.put(key: "darkMode", value: true)
+try await box.put(key: "lastSync", value: Date())
 
-// Retrieve with full type safety
-let username: String = try await settingsCache.get("username")
-let isDarkMode: Bool = try await settingsCache.get("darkMode")
-let lastSync: Date = try await settingsCache.get("lastSync")
+let username: String = try await box.get("username")
+let isDarkMode: Bool = try await box.get("darkMode")
+let lastSync: Date = try await box.get("lastSync")
 ```
+
+
+## Type Declaration Options
+
+Pandora boxes are generic over `Key` and `Value` types. There are three ways to specify those types depending on context:
+
+### 1. Explicit Type Annotation (recommended)
+
+```swift
+let box: PandoraMemoryBox<String, User> = Pandora.Memory.box()
+```
+
+### 2. Type Casting
+
+Useful when you don't want to annotate the variable, but know the types:
+
+```swift
+let box = Pandora.Memory.box() as PandoraMemoryBox<String, User>
+```
+
+### 3. Explicit Type Parameters
+
+Used when Swift can’t infer types or when calling dynamically:
+
+```swift
+let box = Pandora.Memory.box(
+    keyType: String.self,
+    valueType: User.self
+)
+```
+
+[!TIP] This is especially useful inside generic or factory contexts where the return type isn’t obvious.
 
 ## Advanced Usage
 
