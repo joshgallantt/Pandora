@@ -31,6 +31,7 @@ A powerful, type-safe caching library for Swift that provides multiple storage s
 - Actor-based isolation to ensure thread safety without locks
 - Generic, type-safe APIs for flexibility and compile-time safety
 - Optional Combine publishers for reactive data flow
+- test change
 
 ⚡ High Performance Caching
 - LRU eviction for efficient memory usage
