@@ -37,10 +37,7 @@ A powerful, type-safe caching library for Swift that provides multiple storage s
 - Tunable TTL (Time To Live) for automatic expiration
 - Background cleanup to reduce main thread load
 - Zero-lock reads and actor-guarded writes for fast concurrent access
-
-🧩 Flexible Configuration
 - Namespace support for logical cache separation
-- Pluggable storage backends (in-memory, disk, etc.)
 - Custom eviction and expiration policies
 
 ## Installation
