@@ -40,6 +40,10 @@ A powerful, type-safe caching library for Swift that provides multiple storage s
 - Namespace support for logical cache separation
 - Custom eviction and expiration policies
 
+🧩 Flexible Configuration
+- Namespace support for logical cache separation
+- Custom eviction and expiration policies
+
 ## Installation
 
 ### Swift Package Manager
