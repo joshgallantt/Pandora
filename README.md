@@ -26,17 +26,22 @@ A powerful, type-safe caching library for Swift that provides multiple storage s
 - **Hybrid Cache**: Combines memory and disk for optimal performance
 - **UserDefaults Cache**: Simple key-value storage with type safety
 
-🚀 **Modern Swift**
-- Built with Swift Concurrency (async/await)
-- Actor isolation for thread safety
-- Combine publishers for reactive programming
-- Generic types with full type safety
+🚀 Modern Swift Architecture
+- Built on Swift Concurrency (async/await) for clean, readable async code
+- Actor-based isolation to ensure thread safety without locks
+- Generic, type-safe APIs for flexibility and compile-time safety
+- Optional Combine publishers for reactive data flow
 
-⚡ **Performance & Features**
-- LRU (Least Recently Used) eviction policies
-- Configurable TTL (Time To Live) expiration
-- Namespace isolation for multi-cache scenarios
-- Automatic cleanup and memory management
+⚡ High Performance Caching
+- LRU eviction for efficient memory usage
+- Tunable TTL (Time To Live) for automatic expiration
+- Background cleanup to reduce main thread load
+- Zero-lock reads and actor-guarded writes for fast concurrent access
+
+🧩 Flexible Configuration
+- Namespace support for logical cache separation
+- Pluggable storage backends (in-memory, disk, etc.)
+- Custom eviction and expiration policies
 
 ## Installation
 
