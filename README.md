@@ -198,7 +198,6 @@ let box = Pandora.Memory.box(
 ### Custom Expiration Per Key
 
 ```swift
-// Explicit type annotation required
 let cache: PandoraMemoryBox<String, Data> = Pandora.Memory.box()
 
 // Store with custom TTL
@@ -219,7 +218,6 @@ cache.put(
 ### Reactive Programming with Combine
 
 ```swift
-// Explicit type annotation required
 let cache: PandoraMemoryBox<String, User> = Pandora.Memory.box()
 
 // Observe specific keys
