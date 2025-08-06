@@ -13,6 +13,8 @@
 [![SPM ready](https://img.shields.io/badge/SPM-ready-brightgreen.svg?style=flat-square)](https://swift.org/package-manager/)
 [![Coverage](https://img.shields.io/badge/Coverage-98%25-brightgreen.svg?style=flat)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+[![Size](https://img.shields.io/badge/Package_Size-1.5MB-purple.svg?style=flat-square)](#)
+
 
 A powerful, type-safe caching library for Swift that provides multiple storage strategies with a unified API. Built with Swift Concurrency, Combine integration, and modern Swift best practices.
 
@@ -25,6 +27,8 @@ A powerful, type-safe caching library for Swift that provides multiple storage s
 - **Disk Cache**: Persistent file-based storage with actor isolation
 - **Hybrid Cache**: Combines memory and disk for optimal performance
 - **UserDefaults Cache**: Simple key-value storage with type safety
+- **Lightweight:** ~1.5MB and 0 dependancies, now and forever.
+
 
 🚀 Modern Swift Architecture
 - Built on Swift Concurrency (async/await) for clean, readable async code
