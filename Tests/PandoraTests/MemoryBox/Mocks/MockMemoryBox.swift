@@ -11,12 +11,12 @@ import Combine
 
 @testable import Pandora
 
-final class MockMemoryBox<Key: Hashable, Value>: PandoraMemoryBoxProtocol {
+final class MockMemoryBox<Key: Hashable, Value>: PandoraMemoryBox<Key, Value> {
     private var storage: [Key: Value] = [:]
     private var subjects: [Key: CurrentValueSubject<Value?, Never>] = [:]
     private let lock = NSLock()
 
-    func put(key: Key, value: Value, expiresAfter: TimeInterval? = nil) {
+    override func put(key: Key, value: Value, expiresAfter: TimeInterval? = nil) {
         lock.lock()
         storage[key] = value
         if let subj = subjects[key] {
@@ -28,20 +28,20 @@ final class MockMemoryBox<Key: Hashable, Value>: PandoraMemoryBoxProtocol {
         lock.unlock()
     }
 
-    func get(_ key: Key) -> Value? {
+    override func get(_ key: Key) -> Value? {
         lock.lock()
         defer { lock.unlock() }
         return storage[key]
     }
 
-    func remove(_ key: Key) {
+    override func remove(_ key: Key) {
         lock.lock()
         storage.removeValue(forKey: key)
         subjects[key]?.send(nil)
         lock.unlock()
     }
 
-    func clear() {
+    override func clear() {
         lock.lock()
         storage.keys.forEach { key in
             subjects[key]?.send(nil)
@@ -50,7 +50,7 @@ final class MockMemoryBox<Key: Hashable, Value>: PandoraMemoryBoxProtocol {
         lock.unlock()
     }
 
-    func publisher(for key: Key) -> AnyPublisher<Value?, Never> {
+    override func publisher(for key: Key) -> AnyPublisher<Value?, Never> {
         lock.lock()
         let subject: CurrentValueSubject<Value?, Never>
         if let subj = subjects[key] {

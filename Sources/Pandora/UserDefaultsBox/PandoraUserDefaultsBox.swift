@@ -2,178 +2,233 @@
 //  PandoraUserDefaultsBox.swift
 //  Pandora
 //
-//  Created by Josh Gallant on 13/07/2025.
+//  Created by Josh Gallant on 08/08/2025.
 //
 
 import Foundation
+import Combine
 
-/// This actor provides async-safe, namespaced storage using strongly-typed, codable keys and values.
-public actor PandoraUserDefaultsBox: PandoraUserDefaultsBoxProtocol {
-    
-    /// Namespace prefix to ensure key separation from other uses of the same UserDefaults instance.
+/// A thread-safe, namespaced, two-tier cache backed by an in-memory store and `UserDefaults`,
+/// with optional iCloud synchronization.
+///
+/// ### Storage Model
+/// - **Memory layer**: A fast in-memory cache (`PandoraMemoryBox`) that can optionally expire entries.
+/// - **UserDefaults layer**: Persistent local storage.
+/// - **iCloud layer** *(optional)*: Backed by `NSUbiquitousKeyValueStore` for cross-device synchronization.
+///
+/// ### Thread Safety
+/// - `.get` is thread-safe and synchronizes access across all backing stores.
+/// - `.put`, `.remove`, and `.clear` are not locked, as they perform only atomic, per-store writes.
+/// - iCloud change handling is synchronized to prevent partial updates.
+///
+/// ### Key Handling
+/// All keys are scoped to a `namespace` to avoid collisions across different storage consumers.
+/// Internally, keys are prefixed as `"<namespace>.<key>"` before persistence.
+///
+/// ### iCloud Sync
+/// When `iCloudBacked` is `true`, values are mirrored to iCloud on writes, and changes
+/// from other devices are merged into memory and `UserDefaults` via notifications.
+/// Syncing from iCloud is:
+/// - **Eager** on initialization (via `.synchronize()`).
+/// - **Lazy** on read misses from memory/UserDefaults.
+/// - **Reactive** via `NSUbiquitousKeyValueStore.didChangeExternallyNotification`.
+///
+/// ### Observation
+/// The `.publisher(for:)` method returns a `Combine` publisher emitting the current value
+/// immediately, followed by subsequent changes from any source (memory, local, or iCloud).
+///
+/// - Note: The `Value` type must be `Codable` to support encoding/decoding for persistence.
+public final class PandoraUserDefaultsBox<Value: Codable>: PandoraDefaultsBoxProtocol {
+
     public let namespace: String
-    
-    /// Backing store instance for persistence.
-    let userDefaults: UserDefaults
+    public let iCloudBacked: Bool
 
-    /// Creates a new instance, optionally targeting a non-standard UserDefaults suite.
+    private let memory: PandoraMemoryBox<String, Value>
+    private let userDefaults: UserDefaults
+    private let iCloudStore: NSUbiquitousKeyValueStore?
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
+    private let syncLock = PandoraLock()
+
+    /// Creates a new `PandoraUserDefaultsBox`.
+    ///
     /// - Parameters:
-    ///   - namespace: Namespace string for all keys.
-    ///   - userDefaults: The `UserDefaults` instance to use (defaults to `.standard`).
-    public init(namespace: String, userDefaults: UserDefaults = .standard) {
+    ///   - namespace: A unique identifier used to prefix all stored keys.
+    ///   - memoryMaxSize: The maximum number of entries to keep in memory.
+    ///   - memoryExpiresAfter: Optional expiration interval for memory entries.
+    ///   - userDefaults: The backing `UserDefaults` instance. Defaults to `.standard`.
+    ///   - iCloudBacked: Whether to mirror values to iCloud and observe changes.
+    public init(
+        namespace: String,
+        memoryMaxSize: Int = 500,
+        userDefaults: UserDefaults = .standard,
+        iCloudBacked: Bool = true
+    ) {
         self.namespace = namespace
         self.userDefaults = userDefaults
+        self.iCloudBacked = iCloudBacked
+        self.iCloudStore = iCloudBacked ? NSUbiquitousKeyValueStore.default : nil
+        self.memory = PandoraMemoryBox<String, Value>(maxSize: memoryMaxSize, expiresAfter: nil)
+
+        if iCloudBacked {
+            iCloudStore?.synchronize()
+            startObservingiCloudChanges()
+        }
     }
 
-    /// Produces the full, namespaced key for internal use.
-    /// - Parameter key: Logical (un-namespaced) key.
-    /// - Returns: Full string with namespace prefix.
+    internal init(
+        namespace: String,
+        memory: PandoraMemoryBox<String, Value>,
+        userDefaults: UserDefaults,
+        iCloudStore: NSUbiquitousKeyValueStore?,
+        iCloudBacked: Bool,
+        memoryExpiresAfter: TimeInterval? = nil
+    ) {
+        self.namespace = namespace
+        self.memory = memory
+        self.userDefaults = userDefaults
+        self.iCloudStore = iCloudStore
+        self.iCloudBacked = iCloudBacked
+        if iCloudBacked {
+            startObservingiCloudChanges()
+        }
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
     private func nsKey(_ key: String) -> String {
         "\(namespace).\(key)"
     }
 
-    /// Stores an encodable, sendable value under the given key.
-    /// Uses type-specific fast-paths for Foundation primitives. All other types are encoded with `JSONEncoder`.
-    /// - Throws: `PersistentStorageError.encodingFailed` if encoding fails.
-    public func put<T: Encodable & Sendable>(key: String, value: T) async throws {
-        switch value {
-        case let val as String:
-            userDefaults.set(val, forKey: nsKey(key))
-        case let val as Int:
-            userDefaults.set(val, forKey: nsKey(key))
-        case let val as Double:
-            userDefaults.set(val, forKey: nsKey(key))
-        case let val as Float:
-            userDefaults.set(Double(val), forKey: nsKey(key))
-        case let val as Bool:
-            userDefaults.set(val, forKey: nsKey(key))
-        case let val as Date:
-            userDefaults.set(val, forKey: nsKey(key))
-        case let val as URL:
-            userDefaults.set(val, forKey: nsKey(key))
-        case let val as Data:
-            userDefaults.set(val, forKey: nsKey(key))
-        default:
-            do {
-                // Use detached task for thread safety and not to block actor executor.
-                let data = try await Task.detached {
-                    try JSONEncoder().encode(value)
-                }.value
-                userDefaults.set(data, forKey: nsKey(key))
-            } catch {
-                throw UserDefaultsStorageError.encodingFailed(namespace: namespace, key: key, underlyingError: error)
+    // MARK: - Publisher
+
+    /// Returns a publisher that emits the current and future values for the specified key.
+    ///
+    /// The publisher observes the in-memory cache and reflects changes from local writes,
+    /// reads from persistent stores, and incoming iCloud updates.
+    public func publisher(for key: String) -> AnyPublisher<Value?, Never> {
+        memory.publisher(for: key)
+    }
+
+    // MARK: - Get (thread safe)
+
+    /// Retrieves the value for the specified key.
+    ///
+    /// Lookup order:
+    /// 1. In-memory cache (fastest).
+    /// 2. `UserDefaults` (decoded into memory if found).
+    /// 3. iCloud store (decoded into memory and mirrored to `UserDefaults` if found).
+    ///
+    /// Thread-safe: guarded by `syncLock` to ensure atomic multi-store reads and writes.
+    public func get(_ key: String) async -> Value? {
+        await syncLock.withCriticalRegion {
+            if let value = memory.get(key) {
+                return value
             }
+            let fullKey = nsKey(key)
+            if let data = userDefaults.data(forKey: fullKey),
+               let decoded = try? decoder.decode(Value.self, from: data) {
+                memory.put(key: key, value: decoded)
+                return decoded
+            }
+            if iCloudBacked,
+               let data = iCloudStore?.data(forKey: fullKey),
+               let decoded = try? decoder.decode(Value.self, from: data) {
+                memory.put(key: key, value: decoded)
+                userDefaults.set(data, forKey: fullKey)
+                return decoded
+            }
+            return nil
         }
     }
 
-    /// Loads and decodes a value of type `T` for the given key.
+    // MARK: - Put (no lock)
+
+    /// Stores a value in memory and persistent stores.
     ///
-    /// For Foundation primitive types, type-checks and casts. For URLs, handles legacy Data-archived values as well.
-    /// For custom types, decodes using `JSONDecoder`.
-    ///
-    /// - Throws:
-    ///   - `PersistentStorageError.valueNotFound` if no value.
-    ///   - `PersistentStorageError.decodingFailed` for custom types if decode fails.
-    ///   - `PersistentStorageError.foundButTypeMismatch` if a value is found but not of type `T`.
-    public func get<T: Decodable & Sendable>(_ key: String) async throws -> T {
+    /// - Writes to in-memory cache immediately.
+    /// - Persists to `UserDefaults`.
+    /// - Mirrors to iCloud if enabled.
+    /// - Does not acquire a lock — designed for fast, non-blocking writes.
+    public func put(key: String, value: Value) {
+        let data: Data
+        do {
+            data = try encoder.encode(value)
+        } catch {
+            return
+        }
         let fullKey = nsKey(key)
-
-        /// Creates a type-mismatch error for a found value.
-        func mismatch(found: Any) -> UserDefaultsStorageError {
-            .foundButTypeMismatch(namespace: namespace, key: key, expected: T.self, found: type(of: found))
-        }
-
-        guard let object = userDefaults.object(forKey: fullKey) else {
-            throw UserDefaultsStorageError.valueNotFound(namespace: namespace, key: key)
-        }
-
-        switch T.self {
-        case is String.Type:
-            if let string = object as? String {
-                return string as! T
-            }
-            throw mismatch(found: object)
-        case is Int.Type:
-            if let int = object as? Int {
-                return int as! T
-            }
-            throw mismatch(found: object)
-        case is Double.Type:
-            if let double = object as? Double {
-                return double as! T
-            }
-            throw mismatch(found: object)
-        case is Bool.Type:
-            if let bool = object as? Bool {
-                return bool as! T
-            }
-            throw mismatch(found: object)
-        case is Float.Type:
-            if let float = object as? Float {
-                return float as! T
-            }
-            throw mismatch(found: object)
-        case is Date.Type:
-            if let date = object as? Date {
-                return date as! T
-            }
-            throw mismatch(found: object)
-        case is URL.Type:
-            // Handles both direct storage and legacy Data-archived URLs
-            if let data = object as? Data,
-               let url = try? NSKeyedUnarchiver.unarchivedObject(ofClass: NSURL.self, from: data) as URL? {
-                return url as! T
-            } else if let url = object as? URL {
-                return url as! T
-            }
-            throw mismatch(found: object)
-        case is Data.Type:
-            if let data = object as? Data {
-                return data as! T
-            }
-            throw mismatch(found: object)
-        default:
-            // For custom types, decode via JSONDecoder.
-            guard let data = object as? Data else {
-                throw mismatch(found: object)
-            }
-            do {
-                return try await Task.detached {
-                    try JSONDecoder().decode(T.self, from: data)
-                }.value
-            } catch {
-                throw UserDefaultsStorageError.decodingFailed(namespace: namespace, key: key, underlyingError: error)
-            }
+        memory.put(key: key, value: value)
+        userDefaults.set(data, forKey: fullKey)
+        if iCloudBacked {
+            iCloudStore?.set(data, forKey: fullKey)
         }
     }
 
-    /// Removes the value for the given key in this namespace, if it exists.
-    /// - Parameter key: The logical key (un-namespaced).
-    public func remove(_ key: String) async {
-        userDefaults.removeObject(forKey: nsKey(key))
+    // MARK: - Remove (no lock)
+
+    /// Removes the specified key from memory, `UserDefaults`, and iCloud (if enabled).
+    ///
+    /// The iCloud store is synchronized after removal to propagate changes.
+    public func remove(_ key: String) {
+        let fullKey = nsKey(key)
+        memory.remove(key)
+        userDefaults.removeObject(forKey: fullKey)
+        if iCloudBacked {
+            iCloudStore?.removeObject(forKey: fullKey)
+            iCloudStore?.synchronize()
+        }
     }
 
-    /// Removes all values in this namespace only.
-    public func clear() async {
+    // MARK: - Clear (no lock)
+
+    /// Removes all keys in the current namespace from memory, `UserDefaults`, and iCloud (if enabled).
+    public func clear() {
         let prefix = "\(namespace)."
+        memory.clear()
         for (key, _) in userDefaults.dictionaryRepresentation() where key.hasPrefix(prefix) {
             userDefaults.removeObject(forKey: key)
         }
+        if iCloudBacked, let store = iCloudStore {
+            for (key, _) in store.dictionaryRepresentation where key.hasPrefix(prefix) {
+                store.removeObject(forKey: key)
+            }
+            store.synchronize()
+        }
     }
 
-    /// Returns all logical keys present in this namespace.
-    /// - Returns: An array of key strings (un-namespaced).
-    public func allKeys() async -> [String] {
+    // MARK: - iCloud Sync (thread safe)
+
+    private func startObservingiCloudChanges() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(iCloudDidChange),
+            name: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
+            object: iCloudStore
+        )
+    }
+
+    @objc internal func iCloudDidChange(_ notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let changedKeys = userInfo[NSUbiquitousKeyValueStoreChangedKeysKey] as? [String],
+              let store = iCloudStore else { return }
         let prefix = "\(namespace)."
-        return userDefaults.dictionaryRepresentation().keys
-            .filter { $0.hasPrefix(prefix) }
-            .map { String($0.dropFirst(prefix.count)) }
-    }
-
-    /// Checks if a value exists for the given key in this namespace.
-    /// - Parameter key: The logical key (un-namespaced).
-    /// - Returns: `true` if the key exists, otherwise `false`.
-    public func contains(_ key: String) async -> Bool {
-        userDefaults.object(forKey: nsKey(key)) != nil
+        Task {
+            await syncLock.withCriticalRegion {
+                for fullKey in changedKeys where fullKey.hasPrefix(prefix) {
+                    let key = String(fullKey.dropFirst(prefix.count))
+                    if let data = store.data(forKey: fullKey),
+                       let decoded = try? decoder.decode(Value.self, from: data) {
+                        memory.put(key: key, value: decoded)
+                        userDefaults.set(data, forKey: fullKey)
+                    } else {
+                        memory.remove(key)
+                        userDefaults.removeObject(forKey: fullKey)
+                    }
+                }
+            }
+        }
     }
 }

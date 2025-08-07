@@ -117,12 +117,12 @@ final class PandoraTests: XCTestCase {
 
     func test_userDefaultsBox_inference_based() async throws {
         // Given
-        let box = Pandora.UserDefaults.box(namespace: UUID().uuidString)
+        let box: PandoraUserDefaultsBox<TestUser> = Pandora.UserDefaults.box(namespace: UUID().uuidString)
         let user = TestUser(id: 7, name: "UD")
 
         // When
-        try await box.put(key: "user", value: user)
-        let result: TestUser = try await box.get("user")
+        box.put(key: "user", value: user)
+        let result: TestUser? = await box.get("user")
 
         // Then
         XCTAssertEqual(result, user)
@@ -130,12 +130,12 @@ final class PandoraTests: XCTestCase {
 
     func test_userDefaultsBox_explicit_cast() async throws {
         // Given
-        let box = Pandora.UserDefaults.box(namespace: UUID().uuidString)
+        let box: PandoraUserDefaultsBox<TestUser> = Pandora.UserDefaults.box(namespace: UUID().uuidString)
         let user = TestUser(id: 8, name: "UD Explicit")
 
         // When
-        try await box.put(key: "explicit", value: user)
-        let result: TestUser = try await box.get("explicit")
+        box.put(key: "explicit", value: user)
+        let result: TestUser? = await box.get("explicit")
 
         // Then
         XCTAssertEqual(result, user)
@@ -213,10 +213,13 @@ final class PandoraTests: XCTestCase {
     func test_userDefaultsBox_factory_customUserDefaults() async throws {
         let suiteName = "pandoras.udtests." + UUID().uuidString
         let customUD = UserDefaults(suiteName: suiteName)!
-        let box = Pandora.UserDefaults.box(namespace: "custom", userDefaults: customUD)
+        let box: PandoraUserDefaultsBox<TestUser> = Pandora.UserDefaults.box(
+            namespace: "custom",
+            userDefaults: customUD
+        )
         let user = TestUser(id: 17, name: "CustomUD")
-        try await box.put(key: "custom", value: user)
-        let result: TestUser = try await box.get("custom")
+        box.put(key: "custom", value: user)
+        let result: TestUser? = await box.get("custom")
         XCTAssertEqual(result, user)
         customUD.removePersistentDomain(forName: suiteName)
     }
@@ -232,3 +235,4 @@ final class PandoraTests: XCTestCase {
         
     }
 }
+

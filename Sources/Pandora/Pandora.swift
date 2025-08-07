@@ -186,7 +186,7 @@ public enum Pandora {
         ///
         /// box.put(key: "user", value: TestUser(id: 3, name: "Charlie"))
         /// ```
-        public static func box<Key: Hashable & Sendable, Value: Codable & Sendable>(
+        public static func box<Key: Hashable, Value: Codable> (
             namespace: String,
             memoryMaxSize: Int = 500,
             memoryExpiresAfter: TimeInterval? = nil,
@@ -226,7 +226,7 @@ public enum Pandora {
         ///
         /// box.put(key: "user", value: TestUser(id: 3, name: "ExplicitHybrid"))
         /// ```
-        public static func box<Key: Hashable & Sendable, Value: Codable & Sendable>(
+        public static func box<Key: Hashable, Value: Codable>(
             namespace: String,
             keyType: Key.Type,
             valueType: Value.Type,
@@ -266,13 +266,13 @@ public enum Pandora {
         ///
         /// let box = Pandora.UserDefaults.box(namespace: "user.defaults")
         ///
-        /// try await box.put(key: "user", value: TestUser(id: 4, name: "Dora"))
-        /// let result: TestUser = try await box.get("user")
+        /// box.put(key: "user", value: TestUser(id: 4, name: "Dora"))
+        /// let result = await box.get("user")
         /// ```
-        public static func box(
+        public static func box<Value: Codable>(
             namespace: String,
             userDefaults: Foundation.UserDefaults = .standard
-        ) -> PandoraUserDefaultsBox {
+        ) -> PandoraUserDefaultsBox<Value> {
             PandoraUserDefaultsBox(namespace: namespace, userDefaults: userDefaults)
         }
     }

@@ -11,8 +11,8 @@ import Combine
 /// A disk deffered cache. Will check memory first, if nothing available it will check disk and hydrate into memory if possible.
 /// Supports per-key value observation using Combine publishers.
 public protocol PandoraHybridBoxProtocol {
-    associatedtype Key: Hashable & Sendable
-    associatedtype Value: Codable & Sendable
+    associatedtype Key: Hashable
+    associatedtype Value: Codable
 
     /// The unique namespace isolating this cache’s memory and disk entries.
     var namespace: String { get }

@@ -11,7 +11,7 @@
 
 [![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange.svg?style=flat)](https://swift.org)
 [![SPM ready](https://img.shields.io/badge/SPM-ready-brightgreen.svg?style=flat-square)](https://swift.org/package-manager/)
-[![Coverage](https://img.shields.io/badge/Coverage-98%25-brightgreen.svg?style=flat)](#)
+[![Coverage](https://img.shields.io/badge/Coverage-97%65-brightgreen.svg?style=flat)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Size](https://img.shields.io/badge/Package_Size-1.5MB-purple.svg?style=flat-square)](#)
 

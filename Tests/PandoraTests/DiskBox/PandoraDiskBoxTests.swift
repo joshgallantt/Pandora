@@ -27,6 +27,20 @@ final class PandoraDiskBoxTests: XCTestCase {
     override func tearDownWithError() throws {
         try? FileManager.default.removeItem(at: boxDirectory)
     }
+    
+    func test_givenNoSetup_whenAccessSharedRoot_thenReturnsCacheDirectoryWithPandoraDiskBox() {
+        // Given
+        let cachesDirectory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first!
+        let expectedRoot = cachesDirectory.appendingPathComponent("PandoraDiskBox", isDirectory: true)
+
+        // When
+        let actualRoot = PandoraDiskBoxPath.sharedRoot
+
+        // Then
+        XCTAssertEqual(actualRoot, expectedRoot)
+        XCTAssertTrue(actualRoot.path.hasSuffix("PandoraDiskBox"))
+        XCTAssertTrue(actualRoot.isFileURL)
+    }
 
     // MARK: - Directory creation and static root
     func test_givenNonexistentNamespace_whenInit_thenCreatesDirectory() throws {

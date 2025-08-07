@@ -8,15 +8,15 @@
 import Foundation
 import Combine
 
-public final class PandoraHybridBox<Key: Hashable & Sendable, Value: Codable & Sendable>: PandoraHybridBoxProtocol {
+public final class PandoraHybridBox<Key: Hashable, Value: Codable>: PandoraHybridBoxProtocol {
 
     public let namespace: String
 
     private let memory: PandoraMemoryBox<Key, Value>
     private let disk: PandoraDiskBox<Key, Value>
-    private let diskQueue: DispatchQueue
     private let memoryExpiresAfter: TimeInterval?
     private let diskExpiresAfter: TimeInterval?
+    private let syncLock = PandoraLock()
 
     public init(
         namespace: String,
@@ -30,8 +30,6 @@ public final class PandoraHybridBox<Key: Hashable & Sendable, Value: Codable & S
         self.diskExpiresAfter = diskExpiresAfter
         self.memory = PandoraMemoryBox<Key, Value>(maxSize: memoryMaxSize, expiresAfter: memoryExpiresAfter)
         self.disk = PandoraDiskBox<Key, Value>(namespace: namespace, maxSize: diskMaxSize, expiresAfter: diskExpiresAfter)
-        let safeNamespace = namespace.replacingOccurrences(of: "[^A-Za-z0-9_.-]", with: "_", options: .regularExpression)
-        self.diskQueue = DispatchQueue(label: "HybridBox.DiskWrite.\(safeNamespace)", qos: .utility)
     }
     
     internal init(
@@ -39,16 +37,13 @@ public final class PandoraHybridBox<Key: Hashable & Sendable, Value: Codable & S
         memory: PandoraMemoryBox<Key, Value>,
         disk: PandoraDiskBox<Key, Value>,
         memoryExpiresAfter: TimeInterval? = nil,
-        diskExpiresAfter: TimeInterval? = nil,
-        diskQueue: DispatchQueue? = nil
+        diskExpiresAfter: TimeInterval? = nil
     ) {
         self.namespace = namespace
         self.memory = memory
         self.disk = disk
         self.memoryExpiresAfter = memoryExpiresAfter
         self.diskExpiresAfter = diskExpiresAfter
-        let safeNamespace = namespace.replacingOccurrences(of: "[^A-Za-z0-9_.-]", with: "_", options: .regularExpression)
-        self.diskQueue = diskQueue ?? DispatchQueue(label: "HybridBox.DiskWrite.\(safeNamespace)", qos: .utility)
     }
 
     public func publisher(for key: Key) -> AnyPublisher<Value?, Never> {
@@ -56,39 +51,53 @@ public final class PandoraHybridBox<Key: Hashable & Sendable, Value: Codable & S
     }
 
     public func get(_ key: Key) async -> Value? {
-        if let value = memory.get(key) {
-            return value
+        await syncLock.withCriticalRegion {
+            // Check memory first (synchronous, fast)
+            if let value = memory.get(key) {
+                return value
+            }
+            
+            // Check disk (async)
+            if let diskValue = await disk.get(key) {
+                // Hydrate memory cache
+                memory.put(key: key, value: diskValue, expiresAfter: memoryExpiresAfter)
+                return diskValue
+            }
+            
+            return nil
         }
-        if let diskValue = await disk.get(key) {
-            memory.put(key: key, value: diskValue, expiresAfter: memoryExpiresAfter)
-            return diskValue
-        }
-        return nil
     }
 
     public func put(key: Key, value: Value, expiresAfter: TimeInterval? = nil) {
         let memoryExpiry = calculateExpiryDate(overrideTTL: expiresAfter, fallbackTTL: memoryExpiresAfter)
         let diskExpiry = calculateExpiryDate(overrideTTL: expiresAfter, fallbackTTL: diskExpiresAfter)
         
+        // Write to memory immediately (synchronous)
         memory.put(key: key, value: value, expiresAfter: memoryExpiry?.timeIntervalSinceNow)
-        diskQueue.async { [disk = self.disk] in
-            Task {
-                await disk.put(key: key, value: value, expiresAfter: diskExpiry?.timeIntervalSinceNow)
-            }
+        
+        // Write to disk asynchronously
+        Task {
+            await disk.put(key: key, value: value, expiresAfter: diskExpiry?.timeIntervalSinceNow)
         }
     }
 
     public func remove(_ key: Key) {
+        // Remove from memory immediately
         memory.remove(key)
-        diskQueue.async { [disk = self.disk] in
-            Task { await disk.remove(key) }
+        
+        // Remove from disk asynchronously
+        Task {
+            await disk.remove(key)
         }
     }
 
     public func clear() {
+        // Clear memory immediately
         memory.clear()
-        diskQueue.async { [disk = self.disk] in
-            Task { await disk.clear() }
+        
+        // Clear disk asynchronously
+        Task {
+            await disk.clear()
         }
     }
 }

@@ -11,7 +11,7 @@ import Combine
 /// An in-memory, thread-safe, generic cache with LRU eviction and optional global entry expiration (TTL).
 /// Supports per-key value observation using Combine publishers.
 /// On every key removal (explicit, LRU, or expiry), publishers are notified with `nil`.
-public final class PandoraMemoryBox<Key: Hashable, Value>: PandoraMemoryBoxProtocol {
+public class PandoraMemoryBox<Key: Hashable, Value>: PandoraMemoryBoxProtocol {
 
     // MARK: - Private properties
 
