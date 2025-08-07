@@ -8,18 +8,17 @@
 import Foundation
 import Combine
 
-/// A thread-safe, namespaced, two-tier cache backed by an in-memory store and `UserDefaults`,
+/// A thread-safe, namespaced cache backed by an in-memory store and `UserDefaults`,
 /// with optional iCloud synchronization.
 ///
 /// ### Storage Model
-/// - **Memory layer**: A fast in-memory cache (`PandoraMemoryBox`) that can optionally expire entries.
+/// - **Memory layer**: Fast in-memory cache (`PandoraMemoryBox`) without expiry by default.
 /// - **UserDefaults layer**: Persistent local storage.
 /// - **iCloud layer** *(optional)*: Backed by `NSUbiquitousKeyValueStore` for cross-device synchronization.
 ///
 /// ### Thread Safety
-/// - `.get` is thread-safe and synchronizes access across all backing stores.
-/// - `.put`, `.remove`, and `.clear` are not locked, as they perform only atomic, per-store writes.
-/// - iCloud change handling is synchronized to prevent partial updates.
+/// - `.get` is synchronized across all backing stores using an internal `PandoraLock`.
+/// - `.put`, `.remove`, and `.clear` are not locked, as they only perform atomic per-store writes.
 ///
 /// ### Key Handling
 /// All keys are scoped to a `namespace` to avoid collisions across different storage consumers.
@@ -30,12 +29,11 @@ import Combine
 /// from other devices are merged into memory and `UserDefaults` via notifications.
 /// Syncing from iCloud is:
 /// - **Eager** on initialization (via `.synchronize()`).
-/// - **Lazy** on read misses from memory/UserDefaults.
 /// - **Reactive** via `NSUbiquitousKeyValueStore.didChangeExternallyNotification`.
 ///
 /// ### Observation
 /// The `.publisher(for:)` method returns a `Combine` publisher emitting the current value
-/// immediately, followed by subsequent changes from any source (memory, local, or iCloud).
+/// immediately, followed by subsequent changes from memory, local, or iCloud writes.
 ///
 /// - Note: The `Value` type must be `Codable` to support encoding/decoding for persistence.
 public final class PandoraUserDefaultsBox<Value: Codable>: PandoraDefaultsBoxProtocol {

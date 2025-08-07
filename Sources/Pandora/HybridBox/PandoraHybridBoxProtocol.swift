@@ -8,7 +8,8 @@
 import Foundation
 import Combine
 
-/// A disk deffered cache. Will check memory first, if nothing available it will check disk and hydrate into memory if possible.
+/// A hybrid cache that stores values in memory first, falling back to disk if missing,
+/// and hydrates memory from disk on a hit.
 /// Supports per-key value observation using Combine publishers.
 public protocol PandoraHybridBoxProtocol {
     associatedtype Key: Hashable
@@ -34,7 +35,7 @@ public protocol PandoraHybridBoxProtocol {
     /// - Parameters:
     ///   - key: The cache key.
     ///   - value: The value to store.
-    ///   - expiresAfter: Optional override for this entry’s memory TTL.
+    ///   - expiresAfter: Optional override TTL for both memory and disk for this entry.
     func put(key: Key, value: Value, expiresAfter: TimeInterval?)
 
     /// Removes a value for the given key from both memory and disk.

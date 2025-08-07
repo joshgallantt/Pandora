@@ -9,26 +9,32 @@
 import Foundation
 import Combine
 
-/// A UserDefaults-deferred cache with in-memory layer and per-key observation.
-/// All keys are String.
+/// A UserDefaults-backed cache with an in-memory layer and optional iCloud sync.
+/// All keys are `String`.
 public protocol PandoraDefaultsBoxProtocol {
     associatedtype Value: Codable
 
+    /// The namespace used to isolate keys in memory, UserDefaults, and iCloud.
     var namespace: String { get }
 
-    /// Emits current + future value for a key.
+    /// Emits the current and future values for the given key.
     func publisher(for key: String) -> AnyPublisher<Value?, Never>
 
-    /// Reads value, checking memory first, then UserDefaults (and iCloud if enabled).
+    /// Reads the value for the given key, checking memory first, then UserDefaults,
+    /// and iCloud if enabled.
     func get(_ key: String) async -> Value?
 
-    /// Writes value to memory (immediately), UserDefaults (immediately), iCloud (sync, if enabled).
+    /// Writes a value to memory and UserDefaults immediately,
+    /// and to iCloud if enabled.
     func put(key: String, value: Value)
 
-    /// Removes value from memory/UserDefaults/iCloud.
+    /// Removes the value for the given key from memory, UserDefaults,
+    /// and iCloud if enabled.
     func remove(_ key: String)
 
-    /// Clears all values for this namespace.
+    /// Clears all values in the current namespace from memory, UserDefaults,
+    /// and iCloud if enabled.
     func clear()
 }
+
 

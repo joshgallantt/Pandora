@@ -257,14 +257,18 @@ public enum Pandora {
         ///   - userDefaults: The backing store. Defaults to `.standard`.
         /// - Returns: A `PandoraUserDefaultsBox` instance.
         ///
-        /// ### Type Usage Example
+        /// ### Type Inference Examples
         /// ```swift
         /// struct TestUser: Codable, Equatable {
         ///     let id: Int
         ///     let name: String
         /// }
         ///
-        /// let box = Pandora.UserDefaults.box(namespace: "user.defaults")
+        /// // 1. Inference-based
+        /// let box: PandoraUserDefaultsBox<TestUser> = Pandora.UserDefaults.box(namespace: "user.defaults")
+        ///
+        /// // 2. Explicit cast
+        /// let box = Pandora.UserDefaults.box(namespace: "user.defaults") as PandoraUserDefaultsBox<TestUser>
         ///
         /// box.put(key: "user", value: TestUser(id: 4, name: "Dora"))
         /// let result = await box.get("user")
@@ -275,7 +279,37 @@ public enum Pandora {
         ) -> PandoraUserDefaultsBox<Value> {
             PandoraUserDefaultsBox(namespace: namespace, userDefaults: userDefaults)
         }
+
+        /// Returns a cache box backed by `UserDefaults` with an explicit value type.
+        ///
+        /// Useful when type inference fails — for example, when constructing without assigning
+        /// to a concrete variable type or when returning from a function with a generic return type.
+        ///
+        /// - Parameters:
+        ///   - namespace: Prefix used to isolate keys.
+        ///   - valueType: The value type (e.g., `TestUser.self`).
+        ///   - userDefaults: The backing store. Defaults to `.standard`.
+        /// - Returns: A `PandoraUserDefaultsBox` instance.
+        ///
+        /// ### Example
+        /// ```swift
+        /// let box = Pandora.UserDefaults.box(
+        ///     namespace: "user.defaults",
+        ///     valueType: TestUser.self
+        /// )
+        ///
+        /// box.put(key: "user", value: TestUser(id: 4, name: "Dora"))
+        /// let result = await box.get("user")
+        /// ```
+        public static func box<Value: Codable>(
+            namespace: String,
+            valueType: Value.Type,
+            userDefaults: Foundation.UserDefaults = .standard
+        ) -> PandoraUserDefaultsBox<Value> {
+            box(namespace: namespace, userDefaults: userDefaults)
+        }
     }
+
 
     // MARK: - Utilities
 

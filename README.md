@@ -20,6 +20,32 @@ A powerful, type-safe caching library for Swift that provides multiple storage s
 
 </div>
 
+## Table of Contents
+
+1. [Features](#features)
+2. [Installation](#installation)  
+   - [Swift Package Manager](#swift-package-manager)
+3. [Quick Start](#quick-start)
+4. [Cache Types](#cache-types)  
+   - [Memory Box](#memory-box)  
+   - [Disk Box](#disk-box)  
+   - [Hybrid Box](#hybrid-box)  
+   - [UserDefaults Box](#userdefaults-box)
+5. [Type Declaration Options](#type-declaration-options)  
+   - [Explicit Type Annotation](#1-explicit-type-annotation-recommended)  
+   - [Type Casting](#2-type-casting)  
+   - [Explicit Type Parameters](#3-explicit-type-parameters)
+6. [Advanced Usage](#advanced-usage)  
+   - [Custom Expiration Per Key](#custom-expiration-per-key)  
+   - [Reactive Programming with Combine](#reactive-programming-with-combine)  
+   - [Cache Cleanup](#cache-cleanup)
+7. [Thread Safety](#thread-safety)
+8. [Clean Architecture Example Usage](#clean-architecture-example-usage)  
+   - [Repository Layer](#1-create-your-repository-and-initialise-the-cache)  
+   - [Use Cases](#2-use-cases-use-the-cache)  
+   - [ViewModels](#3-viewmodels-use-the-use-cases)
+9. [License](#license)
+
 ## Features
 
 ✨ **Multiple Storage Strategies**
@@ -92,7 +118,7 @@ let box: PandoraMemoryBox<String, Data> = Pandora.Memory.box(
 // Store data
 box.put(key: "image_thumbnail", value: imageData)
 
-// Retrieve data
+// Retrieve data (sync, in-memory only)
 if let data = box.get("image_thumbnail") {
     // Use cached data
 }
@@ -140,10 +166,10 @@ let box: PandoraHybridBox<String, APIResponse> = Pandora.Hybrid.box(
 // Stores in memory immediately, writes to disk asynchronously
 box.put(key: "api_response", value: response)
 
-// Checks memory first, falls back to disk, memory is rehydrated.
+// Checks memory first, falls back to disk, memory is rehydrated
 let cachedResponse = await box.get("api_response")
 
-// Observe memory changes
+// Observe memory changes (does not fire on disk-only changes until rehydrated)
 box.publisher(for: "api_response")
     .sink { response in
         updateUI(with: response)
@@ -151,53 +177,88 @@ box.publisher(for: "api_response")
     .store(in: &cancellables)
 ```
 
-
 ### UserDefaults Box
 
-Type-safe `UserDefaults` storage with namespace isolation.
+Type-safe `UserDefaults` storage with namespace isolation
+and optional iCloud synchronization.
 
 ```swift
-let box = Pandora.UserDefaults.box(namespace: "app_settings")
+let box: PandoraUserDefaultsBox<String> = Pandora.UserDefaults.box(namespace: "app_settings")
 
-try await box.put(key: "username", value: "john_doe")
-try await box.put(key: "darkMode", value: true)
-try await box.put(key: "lastSync", value: Date())
+box.put(key: "username", value: "john_doe")
+let username = await box.get("username")
 
-let username: String = try await box.get("username")
-let isDarkMode: Bool = try await box.get("darkMode")
-let lastSync: Date = try await box.get("lastSync")
+let dateBox: PandoraUserDefaultsBox<Date> = Pandora.UserDefaults.box(namespace: "last_sync")
+dateBox.put(key: "lastSync", value: Date())
+let lastSync = await dateBox.get("lastSync")
+
+let boolBox = Pandora.UserDefaults.box(namespace: "dark_mode") as PandoraUserDefaultsBox<Bool>
+boolBox.put(key: "darkMode", value: true)
+let isDarkMode = await boolBox.get("darkMode")
+
 ```
-
 
 ## Type Declaration Options
 
-Pandora boxes are generic over `Key` and `Value` types. There are three ways to specify those types depending on context:
+Pandora boxes are generic over their key and value types (except `UserDefaults`, which is generic only over the value type).
+There are three ways to specify those types depending on context.
+
 
 ### 1. Explicit Type Annotation (recommended)
 
 ```swift
-let box: PandoraMemoryBox<String, User> = Pandora.Memory.box()
+// Memory, Disk, and Hybrid require both Key and Value types
+let memoryBox: PandoraMemoryBox<String, User> = Pandora.Memory.box()
+let diskBox: PandoraDiskBox<String, User> = Pandora.Disk.box(namespace: "users")
+let hybridBox: PandoraHybridBox<String, User> = Pandora.Hybrid.box(namespace: "users")
+
+// UserDefaults requires only Value type
+let defaultsBox: PandoraUserDefaultsBox<User> = Pandora.UserDefaults.box(namespace: "users")
 ```
+
 
 ### 2. Type Casting
 
 ```swift
-let box = Pandora.Memory.box() as PandoraMemoryBox<String, User>
+let memoryBox = Pandora.Memory.box() as PandoraMemoryBox<String, User>
+let diskBox = Pandora.Disk.box(namespace: "users") as PandoraDiskBox<String, User>
+let hybridBox = Pandora.Hybrid.box(namespace: "users") as PandoraHybridBox<String, User>
+let defaultsBox = Pandora.UserDefaults.box(namespace: "users") as PandoraUserDefaultsBox<User>
 ```
+
 
 ### 3. Explicit Type Parameters
 
-Used when Swift can’t infer types or when calling dynamically:
+Useful when Swift can’t infer types or when constructing dynamically (e.g., in generic or factory contexts).
 
 ```swift
-let box = Pandora.Memory.box(
+// Memory, Disk, Hybrid
+let memoryBox = Pandora.Memory.box(
     keyType: String.self,
+    valueType: User.self
+)
+
+let diskBox = Pandora.Disk.box(
+    namespace: "users",
+    keyType: String.self,
+    valueType: User.self
+)
+
+let hybridBox = Pandora.Hybrid.box(
+    namespace: "users",
+    keyType: String.self,
+    valueType: User.self
+)
+
+// UserDefaults only requires Value type
+let defaultsBox = Pandora.UserDefaults.box(
+    namespace: "users",
     valueType: User.self
 )
 ```
 
 > [!TIP]
-> This is especially useful inside generic or factory contexts where the return type isn’t obvious.
+> Explicit type parameters are especially useful inside generic or factory contexts where the return type isn’t obvious.
 
 ## Advanced Usage
 
