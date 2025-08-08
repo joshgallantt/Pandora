@@ -182,12 +182,8 @@ box.publisher(for: "api_response")
 Type-safe `UserDefaults` storage with namespace isolation
 and optional iCloud synchronization.
 
-> [!TIP]
-> To enable iCloud synchronization, you must add the **iCloud** capability in your Xcode target’s **Signing & Capabilities** tab, and under iCloud services check **Key-Value storage**. Without this, iCloud-backed `UserDefaults` (via `NSUbiquitousKeyValueStore`) will not work.
-
 ```swift
 let box: PandoraUserDefaultsBox<String> = Pandora.UserDefaults.box(namespace: "app_settings")
-
 box.put(key: "username", value: "john_doe")
 let username = await box.get("username")
 
@@ -200,6 +196,9 @@ boolBox.put(key: "darkMode", value: true)
 let isDarkMode = await boolBox.get("darkMode")
 
 ```
+
+> [!TIP]
+> To enable iCloud synchronization, you must add the **iCloud** capability in your Xcode target’s **Signing & Capabilities** tab, and under iCloud services check **Key-Value storage**. Without this, iCloud-backed `UserDefaults` (via `NSUbiquitousKeyValueStore`) will not work.
 
 ## Type Declaration Options
 
