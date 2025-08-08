@@ -49,26 +49,23 @@ A powerful, type-safe caching library for Swift that provides multiple storage s
 ## Features
 
 ✨ **Multiple Storage Strategies**
-- **Memory Cache**: Fast in-memory storage with LRU eviction
-- **Disk Cache**: Persistent file-based storage with actor isolation
-- **Hybrid Cache**: Combines memory and disk for optimal performance
-- **UserDefaults Cache**: Simple key-value storage with type safety
-- **Lightweight:** ~1.5MB and 0 dependancies, now and forever.
+- **Memory Cache**: Fast in-memory storage with LRU eviction and optional TTL
+- **Disk Cache**: Persistent file-based storage with actor isolation and optional TTL
+- **Hybrid Cache**: Combines memory + disk with concurrent load deduplication
+- **UserDefaults Cache**: Namespaced, type-safe storage with optional iCloud sync, global limits, and per-item size caps  
+- **Lightweight**: ~1.5MB, zero dependencies
 
+🚀 **Modern Swift Architecture**
+- Built on **Swift Concurrency** (`async/await`)  
+- **Actor isolation** for safe persistence without manual locks  
+- Generic, type-safe APIs  
+- **Combine** publishers for reactive data flow  
 
-🚀 Modern Swift Architecture
-- Built on Swift Concurrency (async/await) for clean, readable async code
-- Actor-based isolation to ensure thread safety without locks
-- Generic, type-safe APIs for flexibility and compile-time safety
-- Optional Combine publishers for reactive data flow
-
-⚡ High Performance Caching
-- LRU eviction for efficient memory usage
-- Tunable TTL (Time To Live) for automatic expiration
-- Background cleanup to reduce main thread load
-- Zero-lock reads and actor-guarded writes for fast concurrent access
-- Namespace support for logical cache separation
-- Custom eviction and expiration policies
+⚡ **Performance**
+- LRU eviction in memory & disk
+- Per-entry and global TTLs
+- Concurrent load deduplication in HybridBox (`inflight` task pooling)
+- Namespace-based cache separation
 
 ## Installation
 
@@ -78,7 +75,7 @@ Add Pandora to your project using Xcode or by adding it to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/joshgallantt/Pandora.git", from: "1.0.3")
+    .package(url: "https://github.com/joshgallantt/Pandora.git", from: "3.2.0")
 ]
 ```
 
@@ -87,21 +84,29 @@ dependencies: [
 ```swift
 import Pandora
 
-// Memory box for fast access
+// Memory cache — fast, in-memory only
 let memoryBox: PandoraMemoryBox<String, User> = Pandora.Memory.box()
 memoryBox.put(key: "user123", value: user)
 let cachedUser = memoryBox.get("user123")
 
-// Disk box for persistence
+// Disk cache — persistent, actor-isolated
 let diskBox: PandoraDiskBox<String, User> = Pandora.Disk.box(namespace: "users")
 await diskBox.put(key: "user123", value: user)
 let persistedUser = await diskBox.get("user123")
 
-// Hybrid box for best of both worlds
+// Hybrid cache — memory first, disk fallback, async hydration
 let hybridBox: PandoraHybridBox<String, User> = Pandora.Hybrid.box(namespace: "users")
 hybridBox.put(key: "user123", value: user)
 let hybridUser = await hybridBox.get("user123")
-````
+
+// UserDefaults cache — type-safe key-value store with optional iCloud sync
+let defaultsBox: PandoraUserDefaultsBox<User> = Pandora.UserDefaults.box(
+    namespace: "user_defaults",
+    iCloudBacked: true // default: true
+)
+defaultsBox.put(key: "user123", value: user)
+let defaultsUser = await defaultsBox.get("user123")
+```
 
 ## Cache Types
 
@@ -112,22 +117,14 @@ Perfect for frequently accessed data that doesn't need persistence.
 ```swift
 let box: PandoraMemoryBox<String, Data> = Pandora.Memory.box(
     maxSize: 1000,
-    expiresAfter: 3600 // 1 hour TTL
+    expiresAfter: 3600
 )
 
-// Store data
-box.put(key: "image_thumbnail", value: imageData)
+box.put(key: "thumb", value: imageData)
+let data = box.get("thumb")
 
-// Retrieve data (sync, in-memory only)
-if let data = box.get("image_thumbnail") {
-    // Use cached data
-}
-
-// Observe changes with Combine
-box.publisher(for: "image_thumbnail")
-    .sink { data in
-        // React to box changes
-    }
+box.publisher(for: "thumb")
+    .sink { /* react to updates */ }
     .store(in: &cancellables)
 ```
 
@@ -138,15 +135,13 @@ Actor-isolated persistent storage for data that survives app restarts.
 
 ```swift
 let box: PandoraDiskBox<String, UserProfile> = Pandora.Disk.box(
-    namespace: "user_profiles",
+    namespace: "profiles",
     maxSize: 10000,
-    expiresAfter: 86400 // 24 hours
+    expiresAfter: 86400
 )
 
-await box.put(key: "profile_123", value: userProfile)
-let profile = await box.get("profile_123")
-await box.remove("profile_123")
-await box.clear()
+await box.put(key: "p1", value: userProfile)
+let profile = await box.get("p1")
 ```
 
 
@@ -157,23 +152,17 @@ Combines memory and disk storage for optimal performance and persistence.
 ```swift
 let box: PandoraHybridBox<String, APIResponse> = Pandora.Hybrid.box(
     namespace: "api_cache",
-    memoryMaxSize: 500,        // Fast memory access
-    memoryExpiresAfter: 300,   // 5 minutes in memory
-    diskMaxSize: 5000,         // Persistent storage
-    diskExpiresAfter: 3600     // 1 hour on disk
+    memoryMaxSize: 500,
+    memoryExpiresAfter: 300,
+    diskMaxSize: 5000,
+    diskExpiresAfter: 3600
 )
 
-// Stores in memory immediately, writes to disk asynchronously
-box.put(key: "api_response", value: response)
+box.put(key: "resp", value: response)
+let cached = await box.get("resp")
 
-// Checks memory first, falls back to disk, memory is rehydrated
-let cachedResponse = await box.get("api_response")
-
-// Observe memory changes (does not fire on disk-only changes until rehydrated)
-box.publisher(for: "api_response")
-    .sink { response in
-        updateUI(with: response)
-    }
+box.publisher(for: "resp")
+    .sink { updateUI($0) }
     .store(in: &cancellables)
 ```
 
@@ -183,22 +172,16 @@ Type-safe `UserDefaults` storage with namespace isolation,
 optional iCloud synchronization.
 
 ```swift
-let box: PandoraUserDefaultsBox<String> = Pandora.UserDefaults.box(namespace: "app_settings")
-box.put(key: "username", value: "john_doe")
-let username = await box.get("username")
-
-let dateBox: PandoraUserDefaultsBox<Date> = Pandora.UserDefaults.box(namespace: "last_sync")
-dateBox.put(key: "lastSync", value: Date())
-let lastSync = await dateBox.get("lastSync")
-
-let boolBox = Pandora.UserDefaults.box(namespace: "dark_mode", iCloudBacked: true) as PandoraUserDefaultsBox<Bool>
-boolBox.put(key: "darkMode", value: true)
-let isDarkMode = await boolBox.get("darkMode")
-
-
+let settingsBox: PandoraUserDefaultsBox<String> =
+    Pandora.UserDefaults.box(namespace: "settings")
+settingsBox.put(key: "username", value: "john")
+let username = await settingsBox.get("username")
 ```
+
 > [!WARNING] 
-> Won't store data over 1KB in size.
+> * Max **1024 items** across all `UserDefaultsBox` instances
+> * Max **1KB per stored value**
+> * Enforced globally`
 
 > [!TIP]
 > To enable iCloud synchronization, you must add the **iCloud** capability in your Xcode target’s **Signing & Capabilities** tab, and under iCloud services check **Key-Value storage**. Without this, iCloud-backed `UserDefaults` (via `NSUbiquitousKeyValueStore`) will not work.
@@ -319,18 +302,24 @@ cache.publisher(for: "user_id")
 cache.clear()
 await diskCache.clear()
 
-// Remove all disk cache data across all namespaces
+// Remove all Pandora disk caches for this app
 Pandora.clearAllDiskData()
+
+// Remove all keys from this app's UserDefaults and iCloud KVS
+Pandora.clearUserDefaults()
+
+// Remove everything above (nuclear option)
+Pandora.deleteAllLocalStorage()
 ```
 
 ## Thread Safety
 
 All Pandora cache types are designed for concurrent access:
 
-- **Memory Cache**: Thread-safe with internal locking
-- **Disk Cache**: Actor-isolated for async safety
-- **Hybrid Cache**: Combines both safety models
-- **UserDefaults Cache**: Actor-isolated async operations
+* **MemoryBox**: Lock-based thread safety
+* **DiskBox**: Actor-isolated
+* **HybridBox**: Locks for memory + inflight tracking, actor-isolated disk
+* **UserDefaultsBox**: Locks + optional iCloud sync
 
 
 ## Clean Architecture Example Usage
