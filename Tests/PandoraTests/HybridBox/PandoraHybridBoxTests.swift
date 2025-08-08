@@ -65,6 +65,7 @@ final class PandoraHybridBoxTests: XCTestCase {
     }
 
     override func tearDown() {
+        Pandora.deleteAllLocalStorage()
         cancellables = nil
         memory = nil
         disk = nil

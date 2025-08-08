@@ -234,5 +234,81 @@ final class PandoraTests: XCTestCase {
         XCTAssertNil(result)
         
     }
+    
+    func test_givenExplicitValueType_whenCreateUserDefaultsBox_thenRoundTripsValue() async {
+        // Given
+        let box = Pandora.UserDefaults.box(
+            namespace: "ud.explicit.\(UUID().uuidString)",
+            valueType: TestUser.self,
+            iCloudBacked: false
+        )
+        let user = TestUser(id: 20, name: "ExplicitValueType")
+
+        // When
+        box.put(key: "user", value: user)
+        let result = await box.get("user")
+
+        // Then
+        XCTAssertEqual(result, user)
+    }
+
+    // MARK: - clearUserDefaults (standard + iCloud KVS)
+
+    func test_givenKeysInUserDefaultsAndICloud_whenClearUserDefaults_thenStoresAreEmpty() {
+        // Given
+        let defaults = Foundation.UserDefaults.standard
+        let udKey = "pandora.tests.ud.hi"
+        defaults.set("value", forKey: udKey)
+        XCTAssertNotNil(defaults.object(forKey: udKey)) // sanity
+
+        let store = NSUbiquitousKeyValueStore.default
+        let icKey = "pandora.tests.icloud.hi"
+        store.set("value", forKey: icKey)
+        store.synchronize()
+
+        // When
+        Pandora.clearUserDefaults()
+
+        // Then
+        XCTAssertNil(defaults.object(forKey: udKey))
+        XCTAssertNil(store.object(forKey: icKey))
+    }
+
+    // MARK: - deleteAllLocalStorage (disk + UD + iCloud)
+
+    func test_givenDataEverywhere_whenDeleteAllLocalStorage_thenEverythingIsGone() async {
+        // Given: disk
+        let ns = "pandora.tests.disk.hi"
+        let diskBox: PandoraDiskBox<String, TestUser> = Pandora.Disk.box(namespace: ns)
+        let user = TestUser(id: 21, name: "NukeAll")
+        await diskBox.put(key: "user", value: user)
+        let preDiskValue = await diskBox.get("user")
+        XCTAssertEqual(preDiskValue, user)
+
+        // Given: user defaults
+        let defaultsKey = "pandora.tests.deleteall.ud.hi"
+        Foundation.UserDefaults.standard.set(123, forKey: defaultsKey)
+        XCTAssertEqual(Foundation.UserDefaults.standard.integer(forKey: defaultsKey), 123)
+
+        // Given: iCloud KVS
+        let store = NSUbiquitousKeyValueStore.default
+        let icKey = "pandora.tests.deleteall.icloud.hi"
+        store.set(true, forKey: icKey)
+        store.synchronize()
+
+        // When
+        Pandora.deleteAllLocalStorage()
+
+        // Then: disk gone
+        let postDiskValue = await diskBox.get("user")
+        XCTAssertNil(postDiskValue)
+
+        // Then: UD gone
+        XCTAssertNil(Foundation.UserDefaults.standard.object(forKey: defaultsKey))
+
+        // Then: iCloud gone
+        XCTAssertNil(store.object(forKey: icKey))
+    }
+
 }
 

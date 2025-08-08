@@ -8,7 +8,7 @@
 import Foundation
 import Combine
 
-public final class PandoraHybridBox<Key: Hashable, Value: Codable>: PandoraHybridBoxProtocol {
+public final class PandoraHybridBox<Key: Hashable & Codable, Value: Codable>: PandoraHybridBoxProtocol {
 
     public let namespace: String
 
@@ -16,7 +16,8 @@ public final class PandoraHybridBox<Key: Hashable, Value: Codable>: PandoraHybri
     private let disk: PandoraDiskBox<Key, Value>
     private let memoryExpiresAfter: TimeInterval?
     private let diskExpiresAfter: TimeInterval?
-    private let syncLock = PandoraLock()
+    private let syncLock = NSLock()
+    private var inflight: [Key: Task<Value?, Never>] = [:]
 
     public init(
         namespace: String,
@@ -31,7 +32,7 @@ public final class PandoraHybridBox<Key: Hashable, Value: Codable>: PandoraHybri
         self.memory = PandoraMemoryBox<Key, Value>(maxSize: memoryMaxSize, expiresAfter: memoryExpiresAfter)
         self.disk = PandoraDiskBox<Key, Value>(namespace: namespace, maxSize: diskMaxSize, expiresAfter: diskExpiresAfter)
     }
-    
+
     internal init(
         namespace: String,
         memory: PandoraMemoryBox<Key, Value>,
@@ -51,30 +52,49 @@ public final class PandoraHybridBox<Key: Hashable, Value: Codable>: PandoraHybri
     }
 
     public func get(_ key: Key) async -> Value? {
-        await syncLock.withCriticalRegion {
-            // Check memory first (synchronous, fast)
-            if let value = memory.get(key) {
-                return value
+        // Fast path: check memory under scoped lock
+        if let inMemory = syncLock.withLock({ memory.get(key) }) {
+            return inMemory
+        }
+
+        // Atomically get or create a single in-flight task for this key
+        let task: Task<Value?, Never> = syncLock.withLock {
+            if let existing = inflight[key] {
+                return existing
             }
-            
-            // Check disk (async)
-            if let diskValue = await disk.get(key) {
-                // Hydrate memory cache
-                memory.put(key: key, value: diskValue, expiresAfter: memoryExpiresAfter)
+            let newTask = Task<Value?, Never> { [weak self] in
+                guard let self else { return nil }
+                let diskValue = await self.disk.get(key)
+
+                self.syncLock.withLock {
+                    // Always clean up the in-flight entry
+                    self.inflight.removeValue(forKey: key)
+
+                    // Guarded hydrate: only populate memory if still missing
+                    if let v = diskValue, self.memory.get(key) == nil {
+                        self.memory.put(key: key, value: v, expiresAfter: self.memoryExpiresAfter)
+                    }
+                }
+
                 return diskValue
             }
-            
-            return nil
+            inflight[key] = newTask
+            return newTask
         }
+
+        // Await the shared result (no locks held while awaiting)
+        return await task.value
     }
 
     public func put(key: Key, value: Value, expiresAfter: TimeInterval? = nil) {
         let memoryExpiry = calculateExpiryDate(overrideTTL: expiresAfter, fallbackTTL: memoryExpiresAfter)
         let diskExpiry = calculateExpiryDate(overrideTTL: expiresAfter, fallbackTTL: diskExpiresAfter)
-        
-        // Write to memory immediately (synchronous)
-        memory.put(key: key, value: value, expiresAfter: memoryExpiry?.timeIntervalSinceNow)
-        
+
+        // Write to memory synchronously (scoped lock)
+        syncLock.withLock {
+            memory.put(key: key, value: value, expiresAfter: memoryExpiry?.timeIntervalSinceNow)
+        }
+
         // Write to disk asynchronously
         Task {
             await disk.put(key: key, value: value, expiresAfter: diskExpiry?.timeIntervalSinceNow)
@@ -83,8 +103,10 @@ public final class PandoraHybridBox<Key: Hashable, Value: Codable>: PandoraHybri
 
     public func remove(_ key: Key) {
         // Remove from memory immediately
-        memory.remove(key)
-        
+        syncLock.withLock {
+            memory.remove(key)
+        }
+
         // Remove from disk asynchronously
         Task {
             await disk.remove(key)
@@ -93,8 +115,10 @@ public final class PandoraHybridBox<Key: Hashable, Value: Codable>: PandoraHybri
 
     public func clear() {
         // Clear memory immediately
-        memory.clear()
-        
+        syncLock.withLock {
+            memory.clear()
+        }
+
         // Clear disk asynchronously
         Task {
             await disk.clear()

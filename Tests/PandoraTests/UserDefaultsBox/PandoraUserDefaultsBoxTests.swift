@@ -33,6 +33,7 @@ final class PandoraUserDefaultsBoxTests: XCTestCase {
     
     override func tearDown() {
         userDefaults.removePersistentDomain(forName: userDefaultsSuiteName)
+        Pandora.deleteAllLocalStorage()
         cancellables = nil
         super.tearDown()
     }
@@ -207,9 +208,13 @@ final class PandoraUserDefaultsBoxTests: XCTestCase {
         iCloudStore.set(data, forKey: "ns.match")
         
         // When
-        sut.iCloudDidChange(Notification(name: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
-                                         object: iCloudStore,
-                                         userInfo: [NSUbiquitousKeyValueStoreChangedKeysKey: ["ns.match"]]))
+        sut.iCloudDidChange(
+            Notification(
+                name: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
+                object: iCloudStore,
+                userInfo: [NSUbiquitousKeyValueStoreChangedKeysKey: ["ns.match"]]
+            )
+        )
         
         // Allow async Task to run
         let exp = expectation(description: "wait")

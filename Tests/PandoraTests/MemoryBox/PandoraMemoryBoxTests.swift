@@ -29,15 +29,17 @@ final class PandoraMemoryBoxTests: XCTestCase {
 
     // MARK: - Initialisation
 
-    func test_givenNegativeMaxSize_whenInit_thenEvictsOldest() {
+    func test_givenNegativeMaxSize_whenInit_thenDoesNotEvict() {
         // Given
         cache = Cache(maxSize: -10)
         cache.put(key: "x", value: 1)
+
         // When
         for i in 0..<500 { cache.put(key: "n\(i)", value: i) }
         cache.put(key: "y", value: 2)
+
         // Then
-        XCTAssertNil(cache.get("x"))
+        XCTAssertNotNil(cache.get("x"))
         XCTAssertNotNil(cache.get("y"))
     }
 

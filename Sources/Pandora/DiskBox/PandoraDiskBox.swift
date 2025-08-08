@@ -6,11 +6,12 @@
 //
 
 import Foundation
+import CryptoKit
 
 /// A disk-backed, actor-isolated, generic key-value cache with LRU and expiry support.
 /// Each instance stores its data under a unique, namespaced directory beneath the system cache.
-/// Uses collision-free filenames derived from the key.
-public actor PandoraDiskBox<Key: Hashable, Value: Codable>: PandoraDiskBoxProtocol {
+/// Uses collision-resistant filenames derived from a stable hash of the key's canonical encoding.
+public actor PandoraDiskBox<Key: Hashable & Codable, Value: Codable>: PandoraDiskBoxProtocol {
     public var namespace: String
 
     private let directory: URL
@@ -30,6 +31,7 @@ public actor PandoraDiskBox<Key: Hashable, Value: Codable>: PandoraDiskBoxProtoc
     }
 
     public func put(key: Key, value: Value, expiresAfter: TimeInterval? = nil) async {
+        // keep your calculateExpiryDate as-is
         let expiry = calculateExpiryDate(overrideTTL: expiresAfter, fallbackTTL: self.expiresAfter)
         let url = fileURL(for: key)
         let entry = DiskEntry(value: value, expiry: expiry)
@@ -62,23 +64,36 @@ public actor PandoraDiskBox<Key: Hashable, Value: Codable>: PandoraDiskBoxProtoc
         for file in files { try? FileManager.default.removeItem(at: file) }
     }
 
+    // MARK: - Stable filename from hashed Codable key
+
     private func fileURL(for key: Key) -> URL {
-        let keyString: String
-        if let stringKey = key as? String {
-            keyString = stringKey
-        } else {
-            keyString = String(describing: key)
-        }
-        if let encoded = keyString.addingPercentEncoding(withAllowedCharacters: .alphanumerics) {
-            return directory.appendingPathComponent(encoded).appendingPathExtension("box")
-        }
-        let fallback = "\(key.hashValue)_\(Int(Date().timeIntervalSince1970))"
-        return directory.appendingPathComponent(fallback).appendingPathExtension("box")
+        let filename = filenameForKey(key)
+        return directory.appendingPathComponent(filename).appendingPathExtension("box")
     }
+
+    private func filenameForKey(_ key: Key) -> String {
+        // Use a dedicated encoder for keys so value encoding remains unchanged.
+        let keyEncoder = JSONEncoder()
+        keyEncoder.outputFormatting = [.sortedKeys]
+
+        guard let data = try? keyEncoder.encode(key) else {
+            // Extremely unlikely for valid Codable keys; safe fallback.
+            return "key_" + UUID().uuidString.replacingOccurrences(of: "-", with: "").lowercased()
+        }
+
+        let digest = SHA256.hash(data: data)
+        // 64 hex chars, filesystem-safe.
+        return digest.map { String(format: "%02x", $0) }.joined()
+    }
+
+    // MARK: - LRU
 
     private func enforceLRU() async {
         guard let maxSize, maxSize > 0 else { return }
-        let files = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        let files = (try? FileManager.default.contentsOfDirectory(
+            at: directory,
+            includingPropertiesForKeys: [.contentModificationDateKey]
+        )) ?? []
         guard files.count > maxSize else { return }
         let sorted = files.sorted { (lhs, rhs) -> Bool in
             let lDate = (try? lhs.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast

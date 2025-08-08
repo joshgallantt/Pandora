@@ -6,6 +6,7 @@
 //
 
 import XCTest
+import CryptoKit
 @testable import Pandora
 
 final class PandoraDiskBoxTests: XCTestCase {
@@ -25,7 +26,26 @@ final class PandoraDiskBoxTests: XCTestCase {
     }
 
     override func tearDownWithError() throws {
+        Pandora.deleteAllLocalStorage()
         try? FileManager.default.removeItem(at: boxDirectory)
+    }
+    
+    private func hashedFilename<K: Codable & Hashable>(_ key: K) -> String {
+        let enc = JSONEncoder()
+        enc.outputFormatting = [.sortedKeys]
+        let data = try! enc.encode(key)
+        let digest = SHA256.hash(data: data)
+        return digest.map { String(format: "%02x", $0) }.joined()
+    }
+
+    private func boxURL<K: Codable & Hashable>(
+        namespace: String,
+        key: K
+    ) -> URL {
+        PandoraDiskBoxPath.sharedRoot
+            .appendingPathComponent(namespace)
+            .appendingPathComponent(hashedFilename(key))
+            .appendingPathExtension("box")
     }
     
     func test_givenNoSetup_whenAccessSharedRoot_thenReturnsCacheDirectoryWithPandoraDiskBox() {
@@ -176,6 +196,7 @@ final class PandoraDiskBoxTests: XCTestCase {
     }
 
     // MARK: - Expiry
+    
     func test_givenExpirySet_whenExpired_thenReturnsNilAndRemovesFile() async throws {
         // Given
         let expiringNamespace = "expire-\(UUID().uuidString)"
@@ -183,21 +204,23 @@ final class PandoraDiskBoxTests: XCTestCase {
         let key = 7
         let value = TestCodable(id: 7, name: "Expiring")
         await expiringBox.put(key: key, value: value)
-        let fileURL = PandoraDiskBoxPath.sharedRoot
-            .appendingPathComponent(expiringNamespace)
-            .appendingPathComponent("7")
-            .appendingPathExtension("box")
+
+        let fileURL = boxURL(namespace: expiringNamespace, key: key)
         XCTAssertTrue(FileManager.default.fileExists(atPath: fileURL.path))
+
         // When
-        try await Task.sleep(nanoseconds: 100_000_000)
+        try await Task.sleep(nanoseconds: 100_000_000) // 100 ms > 0.05 s
         let result = await expiringBox.get(key)
+
         // Then
         XCTAssertNil(result)
         XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path))
+
         // Cleanup
         let expDir = PandoraDiskBoxPath.sharedRoot.appendingPathComponent(expiringNamespace)
         try? FileManager.default.removeItem(at: expDir)
     }
+    
     func test_givenExpirySet_whenNotExpired_thenReturnsValue() async {
         // Given
         let expiringNamespace = "expire-\(UUID().uuidString)"
@@ -225,6 +248,7 @@ final class PandoraDiskBoxTests: XCTestCase {
         // Then
         XCTAssertNil(result)
     }
+    
     func test_givenFileWithExpiredEntry_whenGet_thenRemovesFile() async throws {
         // Given
         let expiringNamespace = "expire-\(UUID().uuidString)"
@@ -232,17 +256,18 @@ final class PandoraDiskBoxTests: XCTestCase {
         let key = 70
         let value = TestCodable(id: 70, name: "Expiring70")
         await expiringBox.put(key: key, value: value)
-        let fileURL = PandoraDiskBoxPath.sharedRoot
-            .appendingPathComponent(expiringNamespace)
-            .appendingPathComponent("70")
-            .appendingPathExtension("box")
+
+        let fileURL = boxURL(namespace: expiringNamespace, key: key)
         XCTAssertTrue(FileManager.default.fileExists(atPath: fileURL.path))
+
         // When
-        try await Task.sleep(nanoseconds: 50_000_000)
+        try await Task.sleep(nanoseconds: 50_000_000) // 50 ms > 0.01 s
         let result = await expiringBox.get(key)
+
         // Then
         XCTAssertNil(result)
         XCTAssertFalse(FileManager.default.fileExists(atPath: fileURL.path))
+
         // Cleanup
         let expDir = PandoraDiskBoxPath.sharedRoot.appendingPathComponent(expiringNamespace)
         try? FileManager.default.removeItem(at: expDir)
@@ -329,18 +354,24 @@ final class PandoraDiskBoxTests: XCTestCase {
         // Given
         let ns = "lru-\(UUID().uuidString)"
         let box = PandoraDiskBox<Int, String>(namespace: ns, maxSize: 2)
-        // Insert two values
+
         await box.put(key: 1, value: "first")
         await box.put(key: 2, value: "second")
-        let dir = PandoraDiskBoxPath.sharedRoot.appendingPathComponent(ns)
 
-        // Manually set file 1's mod date to long ago to simulate LRU
-        let file1 = dir.appendingPathComponent("1").appendingPathExtension("box")
+        let dir = PandoraDiskBoxPath.sharedRoot.appendingPathComponent(ns)
+        let file1 = boxURL(namespace: ns, key: 1)
+
+        // Sanity: file1 exists
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file1.path))
+
+        // Make key 1 the oldest by forcing its mod date way back
         let oldDate = Date.distantPast
         try FileManager.default.setAttributes([.modificationDate: oldDate], ofItemAtPath: file1.path)
-        // Wait a bit to ensure next file gets a newer date
+
+        // Wait a bit so the next write has a newer timestamp
         try await Task.sleep(nanoseconds: 50_000_000)
-        // Insert third value (should evict file1)
+
+        // When: insert a third value -> should evict the oldest (key 1)
         await box.put(key: 3, value: "third")
 
         // Then
@@ -348,14 +379,15 @@ final class PandoraDiskBoxTests: XCTestCase {
         let value1 = await box.get(1)
         let value2 = await box.get(2)
         let value3 = await box.get(3)
-        XCTAssertFalse(exists1)
+
+        XCTAssertFalse(exists1, "LRU should have evicted key 1 file")
         XCTAssertNil(value1)
         XCTAssertEqual(value2, "second")
         XCTAssertEqual(value3, "third")
+
         // Cleanup
         try? FileManager.default.removeItem(at: dir)
     }
-
 
     // MARK: - Encoder failure (attempt)
     func test_givenPutFails_whenEncoderReturnsNil_thenNoFileWritten() async {
