@@ -10,7 +10,7 @@ import Foundation
 import Combine
 @testable import Pandora
 
-final class MockHybridBox<Key: Hashable & Sendable, Value: Codable & Sendable>: PandoraHybridBoxProtocol {
+final class MockHybridBox<Key: Hashable & Codable, Value: Codable >: PandoraHybridBoxProtocol {
     let namespace: String
 
     private var storage: [Key: Value] = [:]

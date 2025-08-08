@@ -12,7 +12,7 @@ import Combine
 /// and hydrates memory from disk on a hit.
 /// Supports per-key value observation using Combine publishers.
 public protocol PandoraHybridBoxProtocol {
-    associatedtype Key: Hashable
+    associatedtype Key: Hashable & Codable
     associatedtype Value: Codable
 
     /// The unique namespace isolating this cache’s memory and disk entries.

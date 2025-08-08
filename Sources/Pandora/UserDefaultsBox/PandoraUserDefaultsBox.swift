@@ -30,7 +30,7 @@ import Combine
 /// - **iCloud layer** *(optional)*: Backed by `NSUbiquitousKeyValueStore` for cross-device synchronization.
 ///
 /// ### Thread Safety
-/// - Uses `NSLock.withLock {}` for short, synchronous critical sections (Swift 6–safe).
+/// - Uses `NSLock.withLock {}`.
 /// - `get` avoids holding the lock while doing slower work (decoding or iCloud reads).
 /// - Global storage limits are enforced atomically via `PandoraStorageManager`.
 ///

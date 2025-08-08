@@ -8,7 +8,6 @@
 import Foundation
 
 
-/// Manages storage constraints and tracks usage across all namespaces.
 final class PandoraStorageManager {
     static let shared = PandoraStorageManager()
     

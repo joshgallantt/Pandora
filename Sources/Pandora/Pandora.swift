@@ -37,7 +37,7 @@ public enum Pandora {
         /// // 3. Explicit types
         /// let box = Pandora.Memory.box(keyType: String.self, valueType: TestUser.self)
         ///
-        /// box.set(key: "user", value: TestUser(id: 1, name: "Alice"))
+        /// box.put(key: "user", value: TestUser(id: 1, name: "Alice"))
         /// ```
         public static func box<Key: Hashable, Value>(
             maxSize: Int = 500,
@@ -65,7 +65,7 @@ public enum Pandora {
         ///     maxSize: 100
         /// )
         ///
-        /// box.set(key: "user", value: TestUser(id: 1, name: "Explicit"))
+        /// box.put(key: "user", value: TestUser(id: 1, name: "Explicit"))
         /// ```
         public static func box<Key: Hashable, Value>(
             keyType: Key.Type,
@@ -252,6 +252,7 @@ public enum Pandora {
         ///
         /// Keys are namespaced and values stored via `UserDefaults`, with optional iCloud mirroring.
         /// All values are encoded before storage, and rejected entirely if the encoded size exceeds 1024 bytes.
+        /// Maximum 1024 items total across all namespaces (enforced globally).
         ///
         /// - Parameters:
         ///   - namespace: Prefix used to isolate keys.
