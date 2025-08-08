@@ -250,11 +250,13 @@ public enum Pandora {
     public enum UserDefaults {
         /// Returns a cache box backed by `UserDefaults`.
         ///
-        /// Keys are namespaced and values stored via `UserDefaults`.
+        /// Keys are namespaced and values stored via `UserDefaults`, with optional iCloud mirroring.
+        /// All values are encoded before storage, and rejected entirely if the encoded size exceeds 1024 bytes.
         ///
         /// - Parameters:
         ///   - namespace: Prefix used to isolate keys.
         ///   - userDefaults: The backing store. Defaults to `.standard`.
+        ///   - iCloudBacked: Whether to mirror values to iCloud and observe changes. Defaults to `true`.
         /// - Returns: A `PandoraUserDefaultsBox` instance.
         ///
         /// ### Type Inference Examples
@@ -268,16 +270,17 @@ public enum Pandora {
         /// let box: PandoraUserDefaultsBox<TestUser> = Pandora.UserDefaults.box(namespace: "user.defaults")
         ///
         /// // 2. Explicit cast
-        /// let box = Pandora.UserDefaults.box(namespace: "user.defaults") as PandoraUserDefaultsBox<TestUser>
+        /// let box = Pandora.UserDefaults.box(namespace: "user.defaults", iCloudBacked: false) as PandoraUserDefaultsBox<TestUser>
         ///
         /// box.put(key: "user", value: TestUser(id: 4, name: "Dora"))
         /// let result = await box.get("user")
         /// ```
         public static func box<Value: Codable>(
             namespace: String,
-            userDefaults: Foundation.UserDefaults = .standard
+            userDefaults: Foundation.UserDefaults = .standard,
+            iCloudBacked: Bool = true
         ) -> PandoraUserDefaultsBox<Value> {
-            PandoraUserDefaultsBox(namespace: namespace, userDefaults: userDefaults)
+            PandoraUserDefaultsBox(namespace: namespace, userDefaults: userDefaults, iCloudBacked: iCloudBacked)
         }
 
         /// Returns a cache box backed by `UserDefaults` with an explicit value type.
@@ -289,13 +292,15 @@ public enum Pandora {
         ///   - namespace: Prefix used to isolate keys.
         ///   - valueType: The value type (e.g., `TestUser.self`).
         ///   - userDefaults: The backing store. Defaults to `.standard`.
+        ///   - iCloudBacked: Whether to mirror values to iCloud and observe changes. Defaults to `true`.
         /// - Returns: A `PandoraUserDefaultsBox` instance.
         ///
         /// ### Example
         /// ```swift
         /// let box = Pandora.UserDefaults.box(
         ///     namespace: "user.defaults",
-        ///     valueType: TestUser.self
+        ///     valueType: TestUser.self,
+        ///     iCloudBacked: false
         /// )
         ///
         /// box.put(key: "user", value: TestUser(id: 4, name: "Dora"))
@@ -304,9 +309,10 @@ public enum Pandora {
         public static func box<Value: Codable>(
             namespace: String,
             valueType: Value.Type,
-            userDefaults: Foundation.UserDefaults = .standard
+            userDefaults: Foundation.UserDefaults = .standard,
+            iCloudBacked: Bool = true
         ) -> PandoraUserDefaultsBox<Value> {
-            box(namespace: namespace, userDefaults: userDefaults)
+            box(namespace: namespace, userDefaults: userDefaults, iCloudBacked: iCloudBacked)
         }
     }
 

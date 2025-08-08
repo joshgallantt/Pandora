@@ -9,12 +9,14 @@ import Foundation
 import Combine
 
 /// A thread-safe, namespaced cache backed by an in-memory store and `UserDefaults`,
-/// with optional iCloud synchronization.
+/// with optional iCloud synchronization and size-limited entries.
 ///
 /// ### Storage Model
 /// - **Memory layer**: Fast in-memory cache (`PandoraMemoryBox`) without expiry by default.
 /// - **UserDefaults layer**: Persistent local storage.
 /// - **iCloud layer** *(optional)*: Backed by `NSUbiquitousKeyValueStore` for cross-device synchronization.
+/// - **Size constraint**: All values are encoded with `JSONEncoder` before storage, and
+///   rejected entirely if the encoded size exceeds `maxMemoryBytes` (1024 bytes).
 ///
 /// ### Thread Safety
 /// - `.get` is synchronized across all backing stores using an internal `PandoraLock`.
@@ -25,8 +27,8 @@ import Combine
 /// Internally, keys are prefixed as `"<namespace>.<key>"` before persistence.
 ///
 /// ### iCloud Sync
-/// When `iCloudBacked` is `true`, values are mirrored to iCloud on writes, and changes
-/// from other devices are merged into memory and `UserDefaults` via notifications.
+/// When `iCloudBacked` is `true`, values are mirrored to iCloud on writes (subject to the size limit),
+/// and changes from other devices are merged into memory and `UserDefaults` via notifications.
 /// Syncing from iCloud is:
 /// - **Eager** on initialization (via `.synchronize()`).
 /// - **Reactive** via `NSUbiquitousKeyValueStore.didChangeExternallyNotification`.
@@ -47,18 +49,18 @@ public final class PandoraUserDefaultsBox<Value: Codable>: PandoraDefaultsBoxPro
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
     private let syncLock = PandoraLock()
+    
+    private let maxMemoryItems = 1024
+    private let maxMemoryBytes = 1024
 
     /// Creates a new `PandoraUserDefaultsBox`.
     ///
     /// - Parameters:
     ///   - namespace: A unique identifier used to prefix all stored keys.
-    ///   - memoryMaxSize: The maximum number of entries to keep in memory.
-    ///   - memoryExpiresAfter: Optional expiration interval for memory entries.
     ///   - userDefaults: The backing `UserDefaults` instance. Defaults to `.standard`.
     ///   - iCloudBacked: Whether to mirror values to iCloud and observe changes.
     public init(
         namespace: String,
-        memoryMaxSize: Int = 500,
         userDefaults: UserDefaults = .standard,
         iCloudBacked: Bool = true
     ) {
@@ -66,7 +68,7 @@ public final class PandoraUserDefaultsBox<Value: Codable>: PandoraDefaultsBoxPro
         self.userDefaults = userDefaults
         self.iCloudBacked = iCloudBacked
         self.iCloudStore = iCloudBacked ? NSUbiquitousKeyValueStore.default : nil
-        self.memory = PandoraMemoryBox<String, Value>(maxSize: memoryMaxSize, expiresAfter: nil)
+        self.memory = PandoraMemoryBox<String, Value>(maxSize: maxMemoryItems, expiresAfter: nil)
 
         if iCloudBacked {
             iCloudStore?.synchronize()
@@ -144,11 +146,13 @@ public final class PandoraUserDefaultsBox<Value: Codable>: PandoraDefaultsBoxPro
 
     // MARK: - Put (no lock)
 
-    /// Stores a value in memory and persistent stores.
+    /// Stores a value in memory and persistent stores if it meets size constraints.
     ///
-    /// - Writes to in-memory cache immediately.
-    /// - Persists to `UserDefaults`.
-    /// - Mirrors to iCloud if enabled.
+    /// - Encodes the value using `JSONEncoder`.
+    /// - Rejects the value entirely if the encoded size exceeds `maxMemoryBytes` (1024 bytes).
+    /// - Writes to the in-memory cache (if size limit is met).
+    /// - Persists to `UserDefaults` (if size limit is met).
+    /// - Mirrors to iCloud if enabled and size limit is met.
     /// - Does not acquire a lock — designed for fast, non-blocking writes.
     public func put(key: String, value: Value) {
         let data: Data
@@ -157,9 +161,15 @@ public final class PandoraUserDefaultsBox<Value: Codable>: PandoraDefaultsBoxPro
         } catch {
             return
         }
+
+        guard data.count <= maxMemoryBytes else {
+            return
+        }
+
         let fullKey = nsKey(key)
         memory.put(key: key, value: value)
         userDefaults.set(data, forKey: fullKey)
+
         if iCloudBacked {
             iCloudStore?.set(data, forKey: fullKey)
         }
