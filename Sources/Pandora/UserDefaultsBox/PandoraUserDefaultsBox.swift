@@ -5,12 +5,6 @@
 //  Created by Josh Gallant on 08/08/2025.
 //
 
-//
-//  PandoraUserDefaultsBox.swift
-//  Pandora
-//
-//  Created by Josh Gallant on 08/08/2025.
-//
 
 import Foundation
 import Combine
@@ -47,7 +41,7 @@ public final class PandoraUserDefaultsBox<Value: Codable>: PandoraDefaultsBoxPro
     private let iCloudStore: NSUbiquitousKeyValueStore?
     private let encoder = JSONEncoder()
     private let decoder = JSONDecoder()
-    private let syncLock = NSLock() // Swift 6–safe scoped locking only
+    private let syncLock = NSLock()
     private let storageManager = PandoraStorageManager.shared
     
     /// Creates a new `PandoraUserDefaultsBox`.
@@ -200,6 +194,7 @@ public final class PandoraUserDefaultsBox<Value: Codable>: PandoraDefaultsBoxPro
         syncLock.withLock {
             memory.put(key: key, value: value)
         }
+        
         userDefaults.set(data, forKey: fullKey)
         
         if iCloudBacked {
