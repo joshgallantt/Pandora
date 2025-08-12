@@ -5,61 +5,61 @@
 //  Created by Josh Gallant on 13/07/2025.
 //
 
-
 import Foundation
 import Combine
-
 @testable import Pandora
 
-final class MockMemoryBox<Key: Hashable, Value>: PandoraMemoryBox<Key, Value> {
-    private var storage: [Key: Value] = [:]
-    private var subjects: [Key: CurrentValueSubject<Value?, Never>] = [:]
-    private let lock = NSLock()
+final class MockMemoryBox<Key: Hashable & Sendable, Value: Sendable>: PandoraMemoryBox<Key, Value>, @unchecked Sendable {
+    private var mockStorage: [Key: Value] = [:]
+    private var mockSubjects: [Key: CurrentValueSubject<Value?, Never>] = [:]
+    private let mockLock = NSLock()
 
     override func put(key: Key, value: Value, expiresAfter: TimeInterval? = nil) {
-        lock.lock()
-        storage[key] = value
-        if let subj = subjects[key] {
+        mockLock.lock()
+        mockStorage[key] = value
+        if let subj = mockSubjects[key] {
             subj.send(value)
         } else {
             let subj = CurrentValueSubject<Value?, Never>(value)
-            subjects[key] = subj
+            mockSubjects[key] = subj
         }
-        lock.unlock()
+        mockLock.unlock()
     }
 
     override func get(_ key: Key) -> Value? {
-        lock.lock()
-        defer { lock.unlock() }
-        return storage[key]
+        mockLock.lock()
+        defer { mockLock.unlock() }
+        return mockStorage[key]
     }
 
     override func remove(_ key: Key) {
-        lock.lock()
-        storage.removeValue(forKey: key)
-        subjects[key]?.send(nil)
-        lock.unlock()
+        mockLock.lock()
+        mockStorage.removeValue(forKey: key)
+        let subject = mockSubjects[key]
+        mockLock.unlock()
+        
+        subject?.send(nil)
     }
 
     override func clear() {
-        lock.lock()
-        storage.keys.forEach { key in
-            subjects[key]?.send(nil)
-        }
-        storage.removeAll()
-        lock.unlock()
+        mockLock.lock()
+        let allSubjects = Array(mockSubjects.values)
+        mockStorage.removeAll()
+        mockLock.unlock()
+        
+        allSubjects.forEach { $0.send(nil) }
     }
 
     override func publisher(for key: Key) -> AnyPublisher<Value?, Never> {
-        lock.lock()
+        mockLock.lock()
         let subject: CurrentValueSubject<Value?, Never>
-        if let subj = subjects[key] {
+        if let subj = mockSubjects[key] {
             subject = subj
         } else {
-            subject = CurrentValueSubject<Value?, Never>(storage[key])
-            subjects[key] = subject
+            subject = CurrentValueSubject<Value?, Never>(mockStorage[key])
+            mockSubjects[key] = subject
         }
-        lock.unlock()
+        mockLock.unlock()
         return subject.eraseToAnyPublisher()
     }
 }

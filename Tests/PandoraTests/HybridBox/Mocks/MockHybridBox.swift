@@ -5,45 +5,62 @@
 //  Created by Josh Gallant on 27/07/2025.
 //
 
-
 import Foundation
 import Combine
 @testable import Pandora
 
-final class MockHybridBox<Key: Hashable & Codable, Value: Codable >: PandoraHybridBoxProtocol {
+final class MockHybridBox<Key: Hashable & Codable & Sendable, Value: Codable & Sendable>: PandoraHybridBoxProtocol, @unchecked Sendable {
     let namespace: String
 
     private var storage: [Key: Value] = [:]
     private var publishers: [Key: CurrentValueSubject<Value?, Never>] = [:]
+    private let lock = NSLock()
 
     init(namespace: String = "mock") {
         self.namespace = namespace
     }
 
     func publisher(for key: Key) -> AnyPublisher<Value?, Never> {
-        if publishers[key] == nil {
-            publishers[key] = .init(storage[key])
+        lock.withLock {
+            if publishers[key] == nil {
+                publishers[key] = CurrentValueSubject<Value?, Never>(storage[key])
+            }
+            return publishers[key]!.eraseToAnyPublisher()
         }
-        return publishers[key]!.eraseToAnyPublisher()
     }
 
     func get(_ key: Key) async -> Value? {
-        return storage[key]
+        // Wrap synchronous lock in a Task to bridge to async context
+        return await Task {
+            lock.withLock { storage[key] }
+        }.value
     }
 
     func put(key: Key, value: Value, expiresAfter: TimeInterval?) {
-        storage[key] = value
-        publishers[key]?.send(value)
+        let publisher = lock.withLock {
+            storage[key] = value
+            return publishers[key]
+        }
+        
+        publisher?.send(value)
     }
 
     func remove(_ key: Key) {
-        storage.removeValue(forKey: key)
-        publishers[key]?.send(nil)
+        let publisher = lock.withLock {
+            storage.removeValue(forKey: key)
+            return publishers[key]
+        }
+        
+        publisher?.send(nil)
     }
 
     func clear() {
-        storage.removeAll()
-        publishers.values.forEach { $0.send(nil) }
+        let allPublishers = lock.withLock {
+            storage.removeAll()
+            return Array(publishers.values)
+        }
+        
+        allPublishers.forEach { $0.send(nil) }
     }
 
     static func clearAll() {

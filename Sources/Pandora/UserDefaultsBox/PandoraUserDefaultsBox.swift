@@ -5,7 +5,6 @@
 //  Created by Josh Gallant on 08/08/2025.
 //
 
-
 import Foundation
 import Combine
 
@@ -31,7 +30,7 @@ import Combine
 /// ### Key Handling
 /// All keys are scoped to a `namespace` to avoid collisions across different storage consumers.
 /// Internally, keys are prefixed as `"<namespace>.<key>"` before persistence.
-public final class PandoraUserDefaultsBox<Value: Codable>: PandoraDefaultsBoxProtocol {
+public final class PandoraUserDefaultsBox<Value: Codable & Sendable>: PandoraDefaultsBoxProtocol, @unchecked Sendable {
     
     public let namespace: String
     public let iCloudBacked: Bool

@@ -11,7 +11,7 @@ import CryptoKit
 /// A disk-backed, actor-isolated, generic key-value cache with LRU and expiry support.
 /// Each instance stores its data under a unique, namespaced directory beneath the system cache.
 /// Uses collision-resistant filenames derived from a stable hash of the key's canonical encoding.
-public actor PandoraDiskBox<Key: Hashable & Codable, Value: Codable>: PandoraDiskBoxProtocol {
+public actor PandoraDiskBox<Key: Hashable & Codable & Sendable, Value: Codable & Sendable>: PandoraDiskBoxProtocol {
     public var namespace: String
 
     private let directory: URL

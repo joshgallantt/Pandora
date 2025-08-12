@@ -8,7 +8,7 @@
 import Foundation
 import Combine
 
-public final class PandoraHybridBox<Key: Hashable & Codable, Value: Codable>: PandoraHybridBoxProtocol {
+public final class PandoraHybridBox<Key: Hashable & Codable & Sendable, Value: Codable & Sendable>: PandoraHybridBoxProtocol, @unchecked Sendable {
 
     public let namespace: String
 

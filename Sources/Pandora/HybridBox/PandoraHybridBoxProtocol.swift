@@ -11,7 +11,7 @@ import Combine
 /// A hybrid cache that stores values in memory first, falling back to disk if missing,
 /// and hydrates memory from disk on a hit.
 /// Supports per-key value observation using Combine publishers.
-public protocol PandoraHybridBoxProtocol {
+public protocol PandoraHybridBoxProtocol: Sendable {
     associatedtype Key: Hashable & Codable
     associatedtype Value: Codable
 

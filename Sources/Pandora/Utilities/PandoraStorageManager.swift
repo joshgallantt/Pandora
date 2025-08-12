@@ -7,8 +7,7 @@
 
 import Foundation
 
-
-final class PandoraStorageManager {
+final class PandoraStorageManager: @unchecked Sendable {
     static let shared = PandoraStorageManager()
     
     private let maxTotalItems = 1024

@@ -12,18 +12,18 @@ import Combine
 /// Supports per-key value observation using Combine publishers.
 /// On every key removal (explicit, LRU, or expiry), publishers are notified with `nil`.
 /// Subjects are **kept alive** so existing subscribers keep receiving future updates if the key is set again.
-public class PandoraMemoryBox<Key: Hashable, Value>: PandoraMemoryBoxProtocol {
+public class PandoraMemoryBox<Key: Hashable & Sendable, Value: Sendable>: PandoraMemoryBoxProtocol, @unchecked Sendable {
 
     // MARK: - Private properties
 
     /// Maximum number of items retained in the cache. `nil` means unlimited.
-    private var maxSize: Int?
+    private let maxSize: Int?
 
     /// Optional global time-to-live (in seconds) for cache entries. If set, entries expire after this interval.
     private let expiresAfter: TimeInterval?
 
     /// Tracks key order for LRU eviction. Most recently used key is at the end.
-    private var LRUKeys: [Key] = []
+    private var lruKeys: [Key] = []
 
     /// Backing storage for cache entries. Each entry stores the value and its optional expiry date.
     private var storage: [Key: (value: Value, expiry: Date?)] = [:]
@@ -56,6 +56,7 @@ public class PandoraMemoryBox<Key: Hashable, Value>: PandoraMemoryBoxProtocol {
         let expiry = calculateExpiryDate(overrideTTL: expiresAfter, fallbackTTL: self.expiresAfter)
         var removedSubjects: [CurrentValueSubject<Value?, Never>] = []
         var subject: CurrentValueSubject<Value?, Never>?
+        
         lock.lock()
         storage[key] = (value, expiry)
         updateLRU_locked(for: key)
@@ -63,6 +64,7 @@ public class PandoraMemoryBox<Key: Hashable, Value>: PandoraMemoryBoxProtocol {
         removedSubjects.append(contentsOf: removeExpired_locked())
         removedSubjects.append(contentsOf: evictIfNeeded_locked())
         lock.unlock()
+        
         subject?.send(value)
         removedSubjects.forEach { $0.send(nil) }
     }
@@ -70,11 +72,12 @@ public class PandoraMemoryBox<Key: Hashable, Value>: PandoraMemoryBoxProtocol {
     public func get(_ key: Key) -> Value? {
         var result: Value?
         var expiredSubject: CurrentValueSubject<Value?, Never>?
+        
         lock.lock()
         if let entry = storage[key] {
             if isEntryExpired(entry) {
                 storage[key] = nil
-                LRUKeys.removeAll { $0 == key }
+                lruKeys.removeAll { $0 == key }
                 expiredSubject = subjects[key]
             } else {
                 updateLRU_locked(for: key)
@@ -82,17 +85,20 @@ public class PandoraMemoryBox<Key: Hashable, Value>: PandoraMemoryBoxProtocol {
             }
         }
         lock.unlock()
+        
         expiredSubject?.send(nil)
         return result
     }
 
     public func remove(_ key: Key) {
         var removedSubject: CurrentValueSubject<Value?, Never>?
+        
         lock.lock()
         storage[key] = nil
-        LRUKeys.removeAll { $0 == key }
+        lruKeys.removeAll { $0 == key }
         removedSubject = subjects[key]
         lock.unlock()
+        
         removedSubject?.send(nil)
     }
 
@@ -114,24 +120,27 @@ public class PandoraMemoryBox<Key: Hashable, Value>: PandoraMemoryBoxProtocol {
         }
         let publisher = subject.eraseToAnyPublisher()
         lock.unlock()
+        
         return publisher
     }
 
     public func clear() {
         var removedSubjects: [CurrentValueSubject<Value?, Never>] = []
+        
         lock.lock()
         storage.removeAll()
-        LRUKeys.removeAll()
+        lruKeys.removeAll()
         removedSubjects = Array(subjects.values)
         lock.unlock()
+        
         removedSubjects.forEach { $0.send(nil) }
     }
 
     // MARK: - Internal helpers
 
     private func updateLRU_locked(for key: Key) {
-        LRUKeys.removeAll { $0 == key }
-        LRUKeys.append(key)
+        lruKeys.removeAll { $0 == key }
+        lruKeys.append(key)
     }
 
     private func removeExpired_locked() -> [CurrentValueSubject<Value?, Never>] {
@@ -143,7 +152,7 @@ public class PandoraMemoryBox<Key: Hashable, Value>: PandoraMemoryBoxProtocol {
         }
         for key in expiredKeys {
             storage[key] = nil
-            LRUKeys.removeAll { $0 == key }
+            lruKeys.removeAll { $0 == key }
             if let subject = subjects[key] {
                 expiredSubjects.append(subject)
             }
@@ -154,8 +163,8 @@ public class PandoraMemoryBox<Key: Hashable, Value>: PandoraMemoryBoxProtocol {
     private func evictIfNeeded_locked() -> [CurrentValueSubject<Value?, Never>] {
         guard let limit = maxSize else { return [] }
         var removedSubjects: [CurrentValueSubject<Value?, Never>] = []
-        while LRUKeys.count > limit {
-            let oldest = LRUKeys.removeFirst()
+        while lruKeys.count > limit {
+            let oldest = lruKeys.removeFirst()
             storage.removeValue(forKey: oldest)
             if let subject = subjects[oldest] {
                 removedSubjects.append(subject)
