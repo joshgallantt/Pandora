@@ -47,8 +47,17 @@ public final class PandoraHybridBox<Key: Hashable & Codable & Sendable, Value: C
         self.diskExpiresAfter = diskExpiresAfter
     }
 
-    public func publisher(for key: Key) -> AnyPublisher<Value?, Never> {
-        memory.publisher(for: key)
+    public func publisher(for key: Key, emitInitial: Bool = true) -> AnyPublisher<Value?, Never> {
+        if emitInitial {
+            let currentValue = syncLock.withLock { memory.get(key) }
+            return Publishers.Merge(
+                Just(currentValue).eraseToAnyPublisher(),
+                memory.publisher(for: key, emitInitial: false)
+            )
+            .eraseToAnyPublisher()
+        } else {
+            return memory.publisher(for: key, emitInitial: false)
+        }
     }
 
     public func get(_ key: Key) async -> Value? {

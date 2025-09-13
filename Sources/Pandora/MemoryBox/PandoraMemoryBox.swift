@@ -102,7 +102,7 @@ public class PandoraMemoryBox<Key: Hashable & Sendable, Value: Sendable>: Pandor
         removedSubject?.send(nil)
     }
 
-    public func publisher(for key: Key) -> AnyPublisher<Value?, Never> {
+    public func publisher(for key: Key, emitInitial: Bool = true) -> AnyPublisher<Value?, Never> {
         lock.lock()
         let subject: CurrentValueSubject<Value?, Never>
         if let existing = subjects[key] {
@@ -121,7 +121,11 @@ public class PandoraMemoryBox<Key: Hashable & Sendable, Value: Sendable>: Pandor
         let publisher = subject.eraseToAnyPublisher()
         lock.unlock()
         
-        return publisher
+        if emitInitial {
+            return publisher
+        } else {
+            return publisher.dropFirst().eraseToAnyPublisher()
+        }
     }
 
     public func clear() {

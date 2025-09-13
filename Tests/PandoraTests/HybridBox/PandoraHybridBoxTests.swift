@@ -207,4 +207,134 @@ final class PandoraHybridBoxTests: XCTestCase {
         // Then
         XCTAssertNil(result)
     }
+
+    // MARK: - emitInitial Tests
+
+    func test_givenValueExists_whenPublisherWithEmitInitialTrue_thenEmitsCurrentValueImmediately() {
+        // Given
+        box.put(key: "test", value: "hello")
+        let expectation = expectation(description: "Publisher emits current value")
+        var received: [Value?] = []
+
+        // When
+        box.publisher(for: "test", emitInitial: true)
+            .sink { value in
+                received.append(value)
+                if received.count == 1 {
+                    expectation.fulfill()
+                }
+            }
+            .store(in: &cancellables)
+
+        // Then
+        wait(for: [expectation], timeout: 1)
+        XCTAssertEqual(received, ["hello"])
+    }
+
+    func test_givenValueExists_whenPublisherWithEmitInitialFalse_thenDoesNotEmitCurrentValue() {
+        // Given
+        box.put(key: "test", value: "hello")
+        let expectation = expectation(description: "Publisher does not emit current value")
+        var received: [Value?] = []
+
+        // When
+        box.publisher(for: "test", emitInitial: false)
+            .sink { value in
+                received.append(value)
+                // Should not be called immediately
+            }
+            .store(in: &cancellables)
+
+        // Wait a bit to ensure no immediate emission
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            expectation.fulfill()
+        }
+
+        // Then
+        wait(for: [expectation], timeout: 1)
+        XCTAssertTrue(received.isEmpty)
+    }
+
+    func test_givenValueExists_whenPublisherWithEmitInitialFalse_thenEmitsFutureUpdates() {
+        // Given
+        box.put(key: "test", value: "hello")
+        let expectation = expectation(description: "Publisher emits future updates")
+        var received: [Value?] = []
+
+        box.publisher(for: "test", emitInitial: false)
+            .sink { value in
+                received.append(value)
+                if received.count == 2 { // Should get "world", then nil
+                    expectation.fulfill()
+                }
+            }
+            .store(in: &cancellables)
+
+        // When
+        box.put(key: "test", value: "world")
+        box.remove("test")
+
+        // Then
+        wait(for: [expectation], timeout: 1)
+        XCTAssertEqual(received, ["world", nil])
+    }
+
+    func test_givenNoValue_whenPublisherWithEmitInitialTrue_thenEmitsNilImmediately() {
+        // Given
+        let expectation = expectation(description: "Publisher emits nil immediately")
+        var received: [Value?] = []
+
+        // When
+        box.publisher(for: "missing", emitInitial: true)
+            .sink { value in
+                received.append(value)
+                expectation.fulfill()
+            }
+            .store(in: &cancellables)
+
+        // Then
+        wait(for: [expectation], timeout: 1)
+        XCTAssertEqual(received, [nil])
+    }
+
+    func test_givenNoValue_whenPublisherWithEmitInitialFalse_thenDoesNotEmitInitially() {
+        // Given
+        let expectation = expectation(description: "Publisher does not emit initially")
+        var received: [Value?] = []
+
+        box.publisher(for: "missing", emitInitial: false)
+            .sink { value in
+                received.append(value)
+                // Should not be called initially
+            }
+            .store(in: &cancellables)
+
+        // Wait to ensure no immediate emission
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            expectation.fulfill()
+        }
+
+        // Then
+        wait(for: [expectation], timeout: 1)
+        XCTAssertTrue(received.isEmpty)
+    }
+
+    func test_givenDefaultEmitInitial_whenPublisherCalled_thenEmitsCurrentValue() {
+        // Given
+        box.put(key: "default", value: "test")
+        let expectation = expectation(description: "Default behavior emits current value")
+        var received: [Value?] = []
+
+        // When (using default parameter)
+        box.publisher(for: "default")
+            .sink { value in
+                received.append(value)
+                expectation.fulfill()
+            }
+            .store(in: &cancellables)
+
+        // Then
+        wait(for: [expectation], timeout: 1)
+        XCTAssertEqual(received, ["test"])
+    }
 }

@@ -115,8 +115,17 @@ public final class PandoraUserDefaultsBox<Value: Codable & Sendable>: PandoraDef
     // MARK: - Publisher
     
     /// Returns a publisher that emits the current and future values for the specified key.
-    public func publisher(for key: String) -> AnyPublisher<Value?, Never> {
-        memory.publisher(for: key)
+    public func publisher(for key: String, emitInitial: Bool = true) -> AnyPublisher<Value?, Never> {
+        if emitInitial {
+            let currentValue = syncLock.withLock { memory.get(key) }
+            return Publishers.Merge(
+                Just(currentValue).eraseToAnyPublisher(),
+                memory.publisher(for: key, emitInitial: false)
+            )
+            .eraseToAnyPublisher()
+        } else {
+            return memory.publisher(for: key, emitInitial: false)
+        }
     }
     
     // MARK: - Get

@@ -11,7 +11,7 @@
 
 [![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange.svg?style=flat)](https://swift.org)
 [![SPM ready](https://img.shields.io/badge/SPM-ready-brightgreen.svg?style=flat-square)](https://swift.org/package-manager/)
-[![Coverage](https://img.shields.io/badge/Coverage-97.5%25-brightgreen.svg?style=flat)](#)
+[![Coverage](https://img.shields.io/badge/Coverage-97.1%25-brightgreen.svg?style=flat)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Size](https://img.shields.io/badge/Package_Size-1.5MB-purple.svg?style=flat-square)](#)
 
@@ -275,11 +275,19 @@ cache.put(
 ```swift
 let cache: PandoraMemoryBox<String, User> = Pandora.Memory.box()
 
-// Observe specific keys
+// Observe specific keys (emits current value immediately)
 cache.publisher(for: "current_user")
     .compactMap { $0 } // Filter out nil values
     .sink { user in
         print("User updated: \(user.name)")
+    }
+    .store(in: &cancellables)
+
+// Observe only future changes (skip current value)
+cache.publisher(for: "current_user", emitInitial: false)
+    .compactMap { $0 }
+    .sink { user in
+        print("User changed: \(user.name)")
     }
     .store(in: &cancellables)
 
@@ -294,6 +302,14 @@ cache.publisher(for: "user_id")
     }
     .store(in: &cancellables)
 ```
+
+#### Publisher Options
+
+All Pandora publishers support an `emitInitial` parameter to control whether the current value is emitted immediately upon subscription:
+
+- `publisher(for: "key")` - Emits current value immediately (default behavior)
+- `publisher(for: "key", emitInitial: true)` - Explicitly emit current value
+- `publisher(for: "key", emitInitial: false)` - Only emit future changes
 
 ### Cache Cleanup
 

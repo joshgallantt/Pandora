@@ -200,4 +200,134 @@ final class MemoryBoxTests: XCTestCase {
         XCTAssertEqual(cache.get("nil"), 10)
     }
 
+    // MARK: - emitInitial Tests
+
+    func test_givenValueExists_whenPublisherWithEmitInitialTrue_thenEmitsCurrentValueImmediately() {
+        // Given
+        cache.put(key: "test", value: 42)
+        let expectation = self.expectation(description: "Publisher emits current value")
+        var received: [Value?] = []
+
+        // When
+        cache.publisher(for: "test", emitInitial: true)
+            .sink { value in
+                received.append(value)
+                if received.count == 1 {
+                    expectation.fulfill()
+                }
+            }
+            .store(in: &cancellables)
+
+        // Then
+        wait(for: [expectation], timeout: 1)
+        XCTAssertEqual(received, [42])
+    }
+
+    func test_givenValueExists_whenPublisherWithEmitInitialFalse_thenDoesNotEmitCurrentValue() {
+        // Given
+        cache.put(key: "test", value: 42)
+        let expectation = self.expectation(description: "Publisher does not emit current value")
+        var received: [Value?] = []
+
+        // When
+        cache.publisher(for: "test", emitInitial: false)
+            .sink { value in
+                received.append(value)
+                // This should not be called immediately
+            }
+            .store(in: &cancellables)
+
+        // Wait a bit to ensure no immediate emission
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            expectation.fulfill()
+        }
+
+        // Then
+        wait(for: [expectation], timeout: 1)
+        XCTAssertTrue(received.isEmpty)
+    }
+
+    func test_givenValueExists_whenPublisherWithEmitInitialFalse_thenEmitsFutureUpdates() {
+        // Given
+        cache.put(key: "test", value: 42)
+        let expectation = self.expectation(description: "Publisher emits future updates")
+        var received: [Value?] = []
+
+        cache.publisher(for: "test", emitInitial: false)
+            .sink { value in
+                received.append(value)
+                if received.count == 2 { // Should get 99, then nil
+                    expectation.fulfill()
+                }
+            }
+            .store(in: &cancellables)
+
+        // When
+        cache.put(key: "test", value: 99)
+        cache.remove("test")
+
+        // Then
+        wait(for: [expectation], timeout: 1)
+        XCTAssertEqual(received, [99, nil])
+    }
+
+    func test_givenNoValue_whenPublisherWithEmitInitialTrue_thenEmitsNilImmediately() {
+        // Given
+        let expectation = self.expectation(description: "Publisher emits nil immediately")
+        var received: [Value?] = []
+
+        // When
+        cache.publisher(for: "missing", emitInitial: true)
+            .sink { value in
+                received.append(value)
+                expectation.fulfill()
+            }
+            .store(in: &cancellables)
+
+        // Then
+        wait(for: [expectation], timeout: 1)
+        XCTAssertEqual(received, [nil])
+    }
+
+    func test_givenNoValue_whenPublisherWithEmitInitialFalse_thenDoesNotEmitInitially() {
+        // Given
+        let expectation = self.expectation(description: "Publisher does not emit initially")
+        var received: [Value?] = []
+
+        cache.publisher(for: "missing", emitInitial: false)
+            .sink { value in
+                received.append(value)
+                // Should not be called initially
+            }
+            .store(in: &cancellables)
+
+        // Wait to ensure no immediate emission
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            expectation.fulfill()
+        }
+
+        // Then
+        wait(for: [expectation], timeout: 1)
+        XCTAssertTrue(received.isEmpty)
+    }
+
+    func test_givenDefaultEmitInitial_whenPublisherCalled_thenEmitsCurrentValue() {
+        // Given
+        cache.put(key: "default", value: 123)
+        let expectation = self.expectation(description: "Default behavior emits current value")
+        var received: [Value?] = []
+
+        // When (using default parameter)
+        cache.publisher(for: "default")
+            .sink { value in
+                received.append(value)
+                expectation.fulfill()
+            }
+            .store(in: &cancellables)
+
+        // Then
+        wait(for: [expectation], timeout: 1)
+        XCTAssertEqual(received, [123])
+    }
+
 }

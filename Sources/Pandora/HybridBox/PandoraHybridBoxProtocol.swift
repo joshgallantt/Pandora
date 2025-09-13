@@ -22,7 +22,10 @@ public protocol PandoraHybridBoxProtocol: Sendable {
     ///
     /// - Emits the current value (or nil) on subscription, then updates or removals in real time.
     /// - Events are sent immediately for memory changes.
-    func publisher(for key: Key) -> AnyPublisher<Value?, Never>
+    /// - Parameters:
+    ///   - key: The cache key to observe.
+    ///   - emitInitial: Whether to emit the current value immediately upon subscription. Defaults to `true`.
+    func publisher(for key: Key, emitInitial: Bool) -> AnyPublisher<Value?, Never>
 
     /// Reads a value for the given key, checking memory first, then disk.
     ///
