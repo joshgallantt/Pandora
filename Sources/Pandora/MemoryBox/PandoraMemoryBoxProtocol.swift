@@ -31,6 +31,5 @@ public protocol PandoraMemoryBoxProtocol {
     /// Returns a publisher that emits the current and subsequent values for the given key.
     /// - Parameters:
     ///   - key: The cache key to observe.
-    ///   - emitInitial: Whether to emit the current value immediately upon subscription. Defaults to `true`.
-    func publisher(for key: Key, emitInitial: Bool) -> AnyPublisher<Value?, Never>
+    func publisher(for key: Key) -> AnyPublisher<Value?, Never>
 }

@@ -20,8 +20,7 @@ public protocol PandoraDefaultsBoxProtocol {
     /// Emits the current and future values for the given key.
     /// - Parameters:
     ///   - key: The cache key to observe.
-    ///   - emitInitial: Whether to emit the current value immediately upon subscription. Defaults to `true`.
-    func publisher(for key: String, emitInitial: Bool) -> AnyPublisher<Value?, Never>
+    func publisher(for key: String) -> AnyPublisher<Value?, Never>
 
     /// Reads the value for the given key, checking memory first, then UserDefaults,
     /// and iCloud if enabled.
@@ -37,7 +36,6 @@ public protocol PandoraDefaultsBoxProtocol {
 
     /// Clears all values in the current namespace from memory, UserDefaults,
     /// and iCloud if enabled.
-    func clear()
+    func clear() async
 }
-
 

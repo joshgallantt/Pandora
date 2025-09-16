@@ -320,7 +320,43 @@ public enum Pandora {
 
     // MARK: - Utilities
 
-    /// Deletes all disk cache data created by `Pandora.Disk` and `Pandora.Hybrid`.
+    /// Clears all UserDefaults and iCloud data for a specific namespace.
+    ///
+    /// - Parameter namespace: The namespace to clear.
+    public static func clearUserDefaults(for namespace: String) {
+        let defaults = Foundation.UserDefaults.standard
+        let store = NSUbiquitousKeyValueStore.default
+        
+        // Get all keys and filter by namespace
+        let allKeys = Array(defaults.dictionaryRepresentation().keys)
+        let namespaceKeys = allKeys.filter { $0.hasPrefix("\(namespace).") }
+        
+        // Remove from UserDefaults
+        for key in namespaceKeys {
+            defaults.removeObject(forKey: key)
+        }
+        
+        // Remove from iCloud
+        let allICloudKeys = Array(store.dictionaryRepresentation.keys)
+        let namespaceICloudKeys = allICloudKeys.filter { $0.hasPrefix("\(namespace).") }
+        
+        for key in namespaceICloudKeys {
+            store.removeObject(forKey: key)
+        }
+        
+        defaults.synchronize()
+        store.synchronize()
+    }
+    
+    /// Clears all disk data for a specific namespace.
+    ///
+    /// - Parameter namespace: The namespace to clear.
+    public static func clearDiskData(for namespace: String) {
+        let diskPath = PandoraDiskBoxPath.sharedRoot.appendingPathComponent(namespace)
+        try? FileManager.default.removeItem(at: diskPath)
+    }
+
+    /// Clears all disk cache data created by `Pandora.Disk` and `Pandora.Hybrid`.
     ///
     /// - Note: This is a destructive and irreversible operation.
     /// - Warning: This will delete **all** Pandora-managed disk caches.
@@ -328,25 +364,30 @@ public enum Pandora {
         try? FileManager.default.removeItem(at: PandoraDiskBoxPath.sharedRoot)
     }
 
-    /// Removes all keys from the standard `UserDefaults` and `NSUbiquitousKeyValueStore`.
-    ///
-    /// - Warning: This will clear **all keys**, not just Pandora-related ones.
-    public static func clearUserDefaults() {
+    /// Clears all UserDefaults and iCloud data for all Pandora namespaces.
+    public static func clearAllUserDefaults() {
         let defaults = Foundation.UserDefaults.standard
+        let store = NSUbiquitousKeyValueStore.default
         
-        for key in defaults.dictionaryRepresentation().keys {
+        // Get all keys and filter by Pandora namespaces
+        let allKeys = Array(defaults.dictionaryRepresentation().keys)
+        let pandoraKeys = allKeys.filter { $0.hasPrefix("pandora.") }
+        
+        // Remove from UserDefaults
+        for key in pandoraKeys {
             defaults.removeObject(forKey: key)
         }
         
-        let store = NSUbiquitousKeyValueStore.default
-
-        for key in store.dictionaryRepresentation.keys {
+        // Remove from iCloud
+        let allICloudKeys = Array(store.dictionaryRepresentation.keys)
+        let pandoraICloudKeys = allICloudKeys.filter { $0.hasPrefix("pandora.") }
+        
+        for key in pandoraICloudKeys {
             store.removeObject(forKey: key)
         }
         
         defaults.synchronize()
         store.synchronize()
-
     }
     
     /// Deletes all local and iCloud-backed data for this app:
@@ -355,7 +396,7 @@ public enum Pandora {
     /// - Warning: This will clear **all keys**, not just Pandora-related ones.
     public static func deleteAllLocalStorage() {
         clearAllDiskData()
-        clearUserDefaults()
+        clearAllUserDefaults()
     }
 
 }

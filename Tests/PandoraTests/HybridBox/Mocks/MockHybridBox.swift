@@ -20,19 +20,25 @@ final class MockHybridBox<Key: Hashable & Codable & Sendable, Value: Codable & S
         self.namespace = namespace
     }
 
-    func publisher(for key: Key, emitInitial: Bool = true) -> AnyPublisher<Value?, Never> {
+    func publisher(for key: Key) -> AnyPublisher<Value?, Never> {
+        let currentValue = lock.withLock { storage[key] }
+        
+        return Publishers.Merge(
+            Just(currentValue).eraseToAnyPublisher(),
+            getOrCreateMockPublisher(for: key).dropFirst()
+        )
+        .eraseToAnyPublisher()
+    }
+    
+    private func getOrCreateMockPublisher(for key: Key) -> AnyPublisher<Value?, Never> {
         let subject = lock.withLock {
             if publishers[key] == nil {
-                publishers[key] = CurrentValueSubject<Value?, Never>(storage[key])
+                publishers[key] = CurrentValueSubject<Value?, Never>(nil) // Start with nil
             }
             return publishers[key]!
         }
         
-        if emitInitial {
-            return subject.eraseToAnyPublisher()
-        } else {
-            return subject.dropFirst().eraseToAnyPublisher()
-        }
+        return subject.eraseToAnyPublisher()
     }
 
     func get(_ key: Key) async -> Value? {

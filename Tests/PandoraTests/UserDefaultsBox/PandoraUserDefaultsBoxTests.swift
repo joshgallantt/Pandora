@@ -151,7 +151,7 @@ final class PandoraUserDefaultsBoxTests: XCTestCase {
         XCTAssertNil(userDefaults.object(forKey: "ns.rm"))
     }
     
-    func test_clearRemovesAllWithPrefixFromAllStores() {
+    func test_clearRemovesAllWithPrefixFromAllStores() async {
         // Given
         let sut = makeSUT()
         memory.put(key: "x", value: TestValue(id: 1))
@@ -161,7 +161,7 @@ final class PandoraUserDefaultsBoxTests: XCTestCase {
         iCloudStore.set(Data(), forKey: "other")
         
         // When
-        sut.clear()
+        await sut.clear()
         
         // Then
         XCTAssertNil(memory.get("x"))
@@ -172,14 +172,14 @@ final class PandoraUserDefaultsBoxTests: XCTestCase {
         XCTAssertTrue(iCloudStore.didSynchronize)
     }
     
-    func test_clearWithoutICloud_onlyTouchesUserDefaultsAndMemory() {
+    func test_clearWithoutICloud_onlyTouchesUserDefaultsAndMemory() async {
         // Given
         let sut = makeSUT(iCloud: false)
         memory.put(key: "y", value: TestValue(id: 1))
         userDefaults.set(Data(), forKey: "ns.y")
         
         // When
-        sut.clear()
+        await sut.clear()
         
         // Then
         XCTAssertNil(memory.get("y"))
@@ -260,9 +260,9 @@ final class PandoraUserDefaultsBoxTests: XCTestCase {
         XCTAssertEqual(memory.get("keep"), TestValue(id: 1))
     }
 
-    // MARK: - emitInitial Tests
+    // MARK: - Publisher Tests
 
-    func test_givenValueExists_whenPublisherWithEmitInitialTrue_thenEmitsCurrentValueImmediately() {
+    func test_givenValueExists_whenPublisher_thenEmitsCurrentValueImmediately() {
         // Given
         let sut = makeSUT()
         let value = TestValue(id: 42)
@@ -271,7 +271,7 @@ final class PandoraUserDefaultsBoxTests: XCTestCase {
         var received: [TestValue?] = []
 
         // When
-        sut.publisher(for: "test", emitInitial: true)
+        sut.publisher(for: "test")
             .sink { value in
                 received.append(value)
                 if received.count == 1 {
@@ -285,45 +285,19 @@ final class PandoraUserDefaultsBoxTests: XCTestCase {
         XCTAssertEqual(received, [value])
     }
 
-    func test_givenValueExists_whenPublisherWithEmitInitialFalse_thenDoesNotEmitCurrentValue() {
-        // Given
-        let sut = makeSUT()
-        let value = TestValue(id: 42)
-        memory.put(key: "test", value: value)
-        let expectation = XCTestExpectation(description: "Publisher does not emit current value")
-        var received: [TestValue?] = []
-
-        // When
-        sut.publisher(for: "test", emitInitial: false)
-            .sink { value in
-                received.append(value)
-                // Should not be called immediately
-            }
-            .store(in: &cancellables)
-
-        // Wait a bit to ensure no immediate emission
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            expectation.fulfill()
-        }
-
-        // Then
-        wait(for: [expectation], timeout: 1)
-        XCTAssertTrue(received.isEmpty)
-    }
-
-    func test_givenValueExists_whenPublisherWithEmitInitialFalse_thenEmitsFutureUpdates() {
+    func test_givenValueExists_whenPublisher_thenEmitsOnUpdate() {
         // Given
         let sut = makeSUT()
         let initialValue = TestValue(id: 42)
         let updatedValue = TestValue(id: 99)
         memory.put(key: "test", value: initialValue)
-        let expectation = XCTestExpectation(description: "Publisher emits future updates")
+        let expectation = XCTestExpectation(description: "Publisher emits on update")
         var received: [TestValue?] = []
 
-        sut.publisher(for: "test", emitInitial: false)
+        sut.publisher(for: "test")
             .sink { value in
                 received.append(value)
-                if received.count == 2 { // Should get updatedValue, then nil
+                if received.count == 2 {
                     expectation.fulfill()
                 }
             }
@@ -331,21 +305,45 @@ final class PandoraUserDefaultsBoxTests: XCTestCase {
 
         // When
         memory.put(key: "test", value: updatedValue)
+
+        // Then
+        wait(for: [expectation], timeout: 1)
+        XCTAssertEqual(received, [initialValue, updatedValue])
+    }
+
+    func test_givenValueExists_whenPublisher_thenEmitsOnRemoval() {
+        // Given
+        let sut = makeSUT()
+        let value = TestValue(id: 42)
+        memory.put(key: "test", value: value)
+        let expectation = XCTestExpectation(description: "Publisher emits on removal")
+        var received: [TestValue?] = []
+
+        sut.publisher(for: "test")
+            .sink { value in
+                received.append(value)
+                if received.count == 2 {
+                    expectation.fulfill()
+                }
+            }
+            .store(in: &cancellables)
+
+        // When
         memory.remove("test")
 
         // Then
         wait(for: [expectation], timeout: 1)
-        XCTAssertEqual(received, [updatedValue, nil])
+        XCTAssertEqual(received, [value, nil])
     }
 
-    func test_givenNoValue_whenPublisherWithEmitInitialTrue_thenEmitsNilImmediately() {
+    func test_givenNoValue_whenPublisher_thenEmitsNilImmediately() {
         // Given
         let sut = makeSUT()
         let expectation = XCTestExpectation(description: "Publisher emits nil immediately")
         var received: [TestValue?] = []
 
         // When
-        sut.publisher(for: "missing", emitInitial: true)
+        sut.publisher(for: "missing")
             .sink { value in
                 received.append(value)
                 expectation.fulfill()
@@ -357,48 +355,27 @@ final class PandoraUserDefaultsBoxTests: XCTestCase {
         XCTAssertEqual(received, [nil])
     }
 
-    func test_givenNoValue_whenPublisherWithEmitInitialFalse_thenDoesNotEmitInitially() {
+    func test_givenNoValue_whenPublisher_thenEmitsOnValueAdded() {
         // Given
         let sut = makeSUT()
-        let expectation = XCTestExpectation(description: "Publisher does not emit initially")
+        let expectation = XCTestExpectation(description: "Publisher emits when value is added")
         var received: [TestValue?] = []
 
-        sut.publisher(for: "missing", emitInitial: false)
+        sut.publisher(for: "missing")
             .sink { value in
                 received.append(value)
-                // Should not be called initially
+                if received.count == 2 {
+                    expectation.fulfill()
+                }
             }
             .store(in: &cancellables)
 
-        // Wait to ensure no immediate emission
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            expectation.fulfill()
-        }
+        // When
+        memory.put(key: "missing", value: TestValue(id: 123))
 
         // Then
         wait(for: [expectation], timeout: 1)
-        XCTAssertTrue(received.isEmpty)
-    }
-
-    func test_givenDefaultEmitInitial_whenPublisherCalled_thenEmitsCurrentValue() {
-        // Given
-        let sut = makeSUT()
-        let value = TestValue(id: 123)
-        memory.put(key: "default", value: value)
-        let expectation = XCTestExpectation(description: "Default behavior emits current value")
-        var received: [TestValue?] = []
-
-        // When (using default parameter)
-        sut.publisher(for: "default")
-            .sink { value in
-                received.append(value)
-                expectation.fulfill()
-            }
-            .store(in: &cancellables)
-
-        // Then
-        wait(for: [expectation], timeout: 1)
-        XCTAssertEqual(received, [value])
+        XCTAssertEqual(received, [nil, TestValue(id: 123)])
     }
     
     // MARK: - Helpers

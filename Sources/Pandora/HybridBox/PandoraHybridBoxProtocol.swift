@@ -15,7 +15,7 @@ public protocol PandoraHybridBoxProtocol: Sendable {
     associatedtype Key: Hashable & Codable
     associatedtype Value: Codable
 
-    /// The unique namespace isolating this cache’s memory and disk entries.
+    /// The unique namespace isolating this cache's memory and disk entries.
     var namespace: String { get }
 
     /// A publisher emitting the current and subsequent value for the given key.
@@ -24,8 +24,7 @@ public protocol PandoraHybridBoxProtocol: Sendable {
     /// - Events are sent immediately for memory changes.
     /// - Parameters:
     ///   - key: The cache key to observe.
-    ///   - emitInitial: Whether to emit the current value immediately upon subscription. Defaults to `true`.
-    func publisher(for key: Key, emitInitial: Bool) -> AnyPublisher<Value?, Never>
+    func publisher(for key: Key) -> AnyPublisher<Value?, Never>
 
     /// Reads a value for the given key, checking memory first, then disk.
     ///
@@ -45,5 +44,5 @@ public protocol PandoraHybridBoxProtocol: Sendable {
     func remove(_ key: Key)
 
     /// Clears all values from memory and disk for this instance.
-    func clear()
+    func clear() async
 }

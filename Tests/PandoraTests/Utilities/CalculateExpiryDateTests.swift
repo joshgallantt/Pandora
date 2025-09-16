@@ -39,78 +39,34 @@ final class CalculateExpiryDateTests: XCTestCase {
         XCTAssertEqual(expiry?.timeIntervalSince1970, expected.timeIntervalSince1970)
     }
 
-    func test_givenZeroOverrideTTL_whenCalculateExpiryDate_thenReturnsNil() {
-        // Given
-        let overrideTTL: TimeInterval? = 0
-        let fallbackTTL: TimeInterval? = 120
-
-        // When
-        let expiry = expectedExpiry(overrideTTL: overrideTTL, fallbackTTL: fallbackTTL)
-
-        // Then
-        XCTAssertNil(expiry)
+    func test_givenZeroOrNegativeOverrideTTL_whenCalculateExpiryDate_thenReturnsNil() {
+        // Test zero override
+        let expiry1 = expectedExpiry(overrideTTL: 0, fallbackTTL: 120)
+        XCTAssertNil(expiry1)
+        
+        // Test negative override
+        let expiry2 = expectedExpiry(overrideTTL: -1, fallbackTTL: 120)
+        XCTAssertNil(expiry2)
     }
 
-    func test_givenNegativeOverrideTTL_whenCalculateExpiryDate_thenReturnsNil() {
-        // Given
-        let overrideTTL: TimeInterval? = -1
-        let fallbackTTL: TimeInterval? = 120
-
-        // When
-        let expiry = expectedExpiry(overrideTTL: overrideTTL, fallbackTTL: fallbackTTL)
-
-        // Then
-        XCTAssertNil(expiry)
-    }
-
-    func test_givenNilOverride_andPositiveFallbackTTL_whenCalculateExpiryDate_thenReturnsDatePlusFallback() {
-        // Given
-        let overrideTTL: TimeInterval? = nil
-        let fallbackTTL: TimeInterval? = 90
-
-        // When
-        let expected = referenceDate.addingTimeInterval(fallbackTTL!)
-        let expiry = expectedExpiry(overrideTTL: overrideTTL, fallbackTTL: fallbackTTL)
-
-        // Then
-        XCTAssertNotNil(expiry)
-        XCTAssertEqual(expiry?.timeIntervalSince1970, expected.timeIntervalSince1970)
-    }
-
-    func test_givenNilOverride_andZeroFallbackTTL_whenCalculateExpiryDate_thenReturnsNil() {
-        // Given
-        let overrideTTL: TimeInterval? = nil
-        let fallbackTTL: TimeInterval? = 0
-
-        // When
-        let expiry = expectedExpiry(overrideTTL: overrideTTL, fallbackTTL: fallbackTTL)
-
-        // Then
-        XCTAssertNil(expiry)
-    }
-
-    func test_givenNilOverride_andNegativeFallbackTTL_whenCalculateExpiryDate_thenReturnsNil() {
-        // Given
-        let overrideTTL: TimeInterval? = nil
-        let fallbackTTL: TimeInterval? = -42
-
-        // When
-        let expiry = expectedExpiry(overrideTTL: overrideTTL, fallbackTTL: fallbackTTL)
-
-        // Then
-        XCTAssertNil(expiry)
-    }
-
-    func test_givenNilOverride_andNilFallback_whenCalculateExpiryDate_thenReturnsNil() {
-        // Given
-        let overrideTTL: TimeInterval? = nil
-        let fallbackTTL: TimeInterval? = nil
-
-        // When
-        let expiry = expectedExpiry(overrideTTL: overrideTTL, fallbackTTL: fallbackTTL)
-
-        // Then
-        XCTAssertNil(expiry)
+    func test_givenNilOverride_whenCalculateExpiryDate_thenUsesFallbackOrReturnsNil() {
+        // Test positive fallback
+        let expected = referenceDate.addingTimeInterval(90)
+        let expiry1 = expectedExpiry(overrideTTL: nil, fallbackTTL: 90)
+        XCTAssertNotNil(expiry1)
+        XCTAssertEqual(expiry1?.timeIntervalSince1970, expected.timeIntervalSince1970)
+        
+        // Test zero fallback
+        let expiry2 = expectedExpiry(overrideTTL: nil, fallbackTTL: 0)
+        XCTAssertNil(expiry2)
+        
+        // Test negative fallback
+        let expiry3 = expectedExpiry(overrideTTL: nil, fallbackTTL: -42)
+        XCTAssertNil(expiry3)
+        
+        // Test nil fallback
+        let expiry4 = expectedExpiry(overrideTTL: nil, fallbackTTL: nil)
+        XCTAssertNil(expiry4)
     }
 }
 

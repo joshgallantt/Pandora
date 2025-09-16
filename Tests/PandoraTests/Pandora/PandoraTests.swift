@@ -17,83 +17,54 @@ final class PandoraTests: XCTestCase {
 
     // MARK: - PandoraMemoryBoxProtocol
 
-    func test_memoryBox_inference_based() {
-        // Given
-        let box: PandoraMemoryBox<String, TestUser> = Pandora.Memory.box()
-        let user = TestUser(id: 1, name: "Inference")
-
-        // When
-        box.put(key: "user", value: user)
-        let result = box.get("user")
-
-        // Then
-        XCTAssertEqual(result, user)
+    func test_memoryBox_factoryMethods() {
+        // Test inference-based creation
+        let box1: PandoraMemoryBox<String, TestUser> = Pandora.Memory.box()
+        let user1 = TestUser(id: 1, name: "Inference")
+        box1.put(key: "user", value: user1)
+        XCTAssertEqual(box1.get("user"), user1)
         
-    }
-
-    func test_memoryBox_explicit_types() {
-        // Given
-        let box = Pandora.Memory.box(maxSize: 100, expiresAfter: nil) as PandoraMemoryBox<String, TestUser>
-        let user = TestUser(id: 2, name: "Explicit")
-
-        // When
-        box.put(key: "user", value: user)
-        let result = box.get("user")
-
-        // Then
-        XCTAssertEqual(result, user)
+        // Test explicit types
+        let box2 = Pandora.Memory.box(maxSize: 100, expiresAfter: nil) as PandoraMemoryBox<String, TestUser>
+        let user2 = TestUser(id: 2, name: "Explicit")
+        box2.put(key: "user", value: user2)
+        XCTAssertEqual(box2.get("user"), user2)
     }
 
     // MARK: - DiskBox
 
-    func test_diskBox_inference_based() async {
-        // Given
-        let box: PandoraDiskBox<String, TestUser> = Pandora.Disk.box(namespace: UUID().uuidString)
-        let user = TestUser(id: 3, name: "Disky")
-
-        // When
-        await box.put(key: "user", value: user)
-        let result = await box.get("user")
-
-        // Then
-        XCTAssertEqual(result, user)
-    }
-
-    func test_diskBox_explicit_types() async {
-        // Given
-        let box = Pandora.Disk.box(
+    func test_diskBox_factoryMethods() async {
+        // Test inference-based creation
+        let box1: PandoraDiskBox<String, TestUser> = Pandora.Disk.box(namespace: UUID().uuidString)
+        let user1 = TestUser(id: 3, name: "Disky")
+        await box1.put(key: "user", value: user1)
+        let result1 = await box1.get("user")
+        XCTAssertEqual(result1, user1)
+        
+        // Test explicit types
+        let box2 = Pandora.Disk.box(
             namespace: UUID().uuidString,
             maxSize: 10,
             expiresAfter: 3600
         ) as PandoraDiskBox<String, TestUser>
-        let user = TestUser(id: 4, name: "ExplicitDisk")
-
-        // When
-        await box.put(key: "user", value: user)
-        let result = await box.get("user")
-
-        // Then
-        XCTAssertEqual(result, user)
+        let user2 = TestUser(id: 4, name: "ExplicitDisk")
+        await box2.put(key: "user", value: user2)
+        let result2 = await box2.get("user")
+        XCTAssertEqual(result2, user2)
     }
 
     // MARK: - PandoraHybridBox
 
-    func test_hybridBox_inference_based() async {
-        // Given
-        let box: PandoraHybridBox<String, TestUser> = Pandora.Hybrid.box(namespace: UUID().uuidString)
-        let user = TestUser(id: 5, name: "Hybrid")
-
-        // When
-        box.put(key: "user", value: user)
-        let result = await box.get("user")
-
-        // Then
-        XCTAssertEqual(result, user)
-    }
-
-    func test_hybridBox_explicit_types() async {
-        // Given
-        let box = Pandora.Hybrid.box(
+    func test_hybridBox_factoryMethods() async {
+        // Test inference-based creation
+        let box1: PandoraHybridBox<String, TestUser> = Pandora.Hybrid.box(namespace: UUID().uuidString)
+        let user1 = TestUser(id: 5, name: "Hybrid")
+        box1.put(key: "user", value: user1)
+        let result1 = await box1.get("user")
+        XCTAssertEqual(result1, user1)
+        
+        // Test explicit types
+        let box2 = Pandora.Hybrid.box(
             namespace: UUID().uuidString,
             keyType: String.self,
             valueType: TestUser.self,
@@ -102,43 +73,28 @@ final class PandoraTests: XCTestCase {
             diskMaxSize: 50,
             diskExpiresAfter: nil
         )
-
-        let user = TestUser(id: 6, name: "ExplicitHybrid")
-
-        // When
-        box.put(key: "user", value: user)
-        let result = await box.get("user")
-
-        // Then
-        XCTAssertEqual(result, user)
+        let user2 = TestUser(id: 6, name: "ExplicitHybrid")
+        box2.put(key: "user", value: user2)
+        let result2 = await box2.get("user")
+        XCTAssertEqual(result2, user2)
     }
 
     // MARK: - PandoraUserDefaultsBoxProtocol
 
-    func test_userDefaultsBox_inference_based() async throws {
-        // Given
-        let box: PandoraUserDefaultsBox<TestUser> = Pandora.UserDefaults.box(namespace: UUID().uuidString)
-        let user = TestUser(id: 7, name: "UD")
-
-        // When
-        box.put(key: "user", value: user)
-        let result: TestUser? = await box.get("user")
-
-        // Then
-        XCTAssertEqual(result, user)
-    }
-
-    func test_userDefaultsBox_explicit_cast() async throws {
-        // Given
-        let box: PandoraUserDefaultsBox<TestUser> = Pandora.UserDefaults.box(namespace: UUID().uuidString)
-        let user = TestUser(id: 8, name: "UD Explicit")
-
-        // When
-        box.put(key: "explicit", value: user)
-        let result: TestUser? = await box.get("explicit")
-
-        // Then
-        XCTAssertEqual(result, user)
+    func test_userDefaultsBox_factoryMethods() async throws {
+        // Test inference-based creation
+        let box1: PandoraUserDefaultsBox<TestUser> = Pandora.UserDefaults.box(namespace: UUID().uuidString)
+        let user1 = TestUser(id: 7, name: "UD")
+        box1.put(key: "user", value: user1)
+        let result1 = await box1.get("user")
+        XCTAssertEqual(result1, user1)
+        
+        // Test explicit cast
+        let box2: PandoraUserDefaultsBox<TestUser> = Pandora.UserDefaults.box(namespace: UUID().uuidString)
+        let user2 = TestUser(id: 8, name: "UD Explicit")
+        box2.put(key: "explicit", value: user2)
+        let result2 = await box2.get("explicit")
+        XCTAssertEqual(result2, user2)
     }
 
     // MARK: - Global Disk Cleanup
@@ -160,54 +116,28 @@ final class PandoraTests: XCTestCase {
         XCTAssertNil(result)
     }
     
-    // MARK: - Pandora Enum Static Factory Coverage
+    // MARK: - Additional Factory Coverage
     
-    func test_memoryBox_factory_explicitTypes() {
-        let box = Pandora.Memory.box(keyType: String.self, valueType: TestUser.self, maxSize: 2, expiresAfter: 1)
-        let user = TestUser(id: 11, name: "ExplicitMemory")
-        box.put(key: "explicit", value: user)
-        let result = box.get("explicit")
-        XCTAssertEqual(result, user)
-    }
-    
-    func test_diskBox_factory_explicitTypes() async {
-        let box = Pandora.Disk.box(namespace: UUID().uuidString, keyType: String.self, valueType: TestUser.self, maxSize: 2, expiresAfter: 1)
-        let user = TestUser(id: 12, name: "ExplicitDiskAlt")
-        await box.put(key: "explicit", value: user)
-        let result = await box.get("explicit")
-        XCTAssertEqual(result, user)
-    }
-    
-    func test_hybridBox_factory_explicitTypes() async {
-        let box = Pandora.Hybrid.box(namespace: UUID().uuidString, keyType: String.self, valueType: TestUser.self, memoryMaxSize: 10, memoryExpiresAfter: 1, diskMaxSize: 2, diskExpiresAfter: 1)
-        let user = TestUser(id: 13, name: "ExplicitHybridAlt")
-        box.put(key: "explicit", value: user)
-        let result = await box.get("explicit")
-        XCTAssertEqual(result, user)
-    }
-    
-    func test_memoryBox_factory_defaultParams() {
-        let box = Pandora.Memory.box() as PandoraMemoryBox<String, TestUser>
-        let user = TestUser(id: 14, name: "DefaultMemory")
-        box.put(key: "default", value: user)
-        let result = box.get("default")
-        XCTAssertEqual(result, user)
-    }
-    
-    func test_diskBox_factory_defaultParams() async {
-        let box = Pandora.Disk.box(namespace: UUID().uuidString) as PandoraDiskBox<String, TestUser>
-        let user = TestUser(id: 15, name: "DefaultDisk")
-        await box.put(key: "default", value: user)
-        let result = await box.get("default")
-        XCTAssertEqual(result, user)
-    }
-    
-    func test_hybridBox_factory_defaultParams() async {
-        let box: PandoraHybridBox<String, TestUser> = Pandora.Hybrid.box(namespace: UUID().uuidString)
-        let user = TestUser(id: 16, name: "DefaultHybrid")
-        box.put(key: "default", value: user)
-        let result = await box.get("default")
-        XCTAssertEqual(result, user)
+    func test_factoryMethodsWithCustomParameters() async {
+        // Test MemoryBox with custom parameters
+        let memoryBox = Pandora.Memory.box(keyType: String.self, valueType: TestUser.self, maxSize: 2, expiresAfter: 1)
+        let user1 = TestUser(id: 11, name: "CustomMemory")
+        memoryBox.put(key: "custom", value: user1)
+        XCTAssertEqual(memoryBox.get("custom"), user1)
+        
+        // Test DiskBox with custom parameters
+        let diskBox = Pandora.Disk.box(namespace: UUID().uuidString, keyType: String.self, valueType: TestUser.self, maxSize: 2, expiresAfter: 1)
+        let user2 = TestUser(id: 12, name: "CustomDisk")
+        await diskBox.put(key: "custom", value: user2)
+        let result2 = await diskBox.get("custom")
+        XCTAssertEqual(result2, user2)
+        
+        // Test HybridBox with custom parameters
+        let hybridBox = Pandora.Hybrid.box(namespace: UUID().uuidString, keyType: String.self, valueType: TestUser.self, memoryMaxSize: 10, memoryExpiresAfter: 1, diskMaxSize: 2, diskExpiresAfter: 1)
+        let user3 = TestUser(id: 13, name: "CustomHybrid")
+        hybridBox.put(key: "custom", value: user3)
+        let result3 = await hybridBox.get("custom")
+        XCTAssertEqual(result3, user3)
     }
     
     func test_userDefaultsBox_factory_customUserDefaults() async throws {
@@ -267,11 +197,79 @@ final class PandoraTests: XCTestCase {
         store.synchronize()
 
         // When
-        Pandora.clearUserDefaults()
+        Pandora.clearAllUserDefaults()
 
         // Then
         XCTAssertNil(defaults.object(forKey: udKey))
         XCTAssertNil(store.object(forKey: icKey))
+    }
+
+    // MARK: - New Clearing API Tests
+
+    func test_clearDiskData_forSpecificNamespace_removesOnlyThatNamespace() async {
+        // Given
+        let namespace1 = "test.disk.namespace1"
+        let namespace2 = "test.disk.namespace2"
+        
+        let box1: PandoraDiskBox<String, String> = Pandora.Disk.box(namespace: namespace1)
+        let box2: PandoraDiskBox<String, String> = Pandora.Disk.box(namespace: namespace2)
+        
+        // Add data to both namespaces
+        await box1.put(key: "key1", value: "value1")
+        await box2.put(key: "key2", value: "value2")
+        
+        // Verify data exists
+        let result1 = await box1.get("key1")
+        let result2 = await box2.get("key2")
+        XCTAssertEqual(result1, "value1")
+        XCTAssertEqual(result2, "value2")
+        
+        // When - clear only namespace1
+        Pandora.clearDiskData(for: namespace1)
+        
+        // Then - create new boxes to test disk clearing
+        let newBox1: PandoraDiskBox<String, String> = Pandora.Disk.box(namespace: namespace1)
+        let newBox2: PandoraDiskBox<String, String> = Pandora.Disk.box(namespace: namespace2)
+        
+        // namespace1 should be empty (disk cleared), namespace2 should still have data
+        let result3 = await newBox1.get("key1")
+        let result4 = await newBox2.get("key2")
+        XCTAssertNil(result3) // Disk data cleared for namespace1
+        XCTAssertEqual(result4, "value2") // Disk data still exists for namespace2
+    }
+
+    // MARK: - Namespace Clearing Functions
+
+    func test_clearUserDefaultsNamespace_removesSpecificNamespace() async {
+        // Given
+        let namespace1 = "test.ud.namespace1"
+        let namespace2 = "test.ud.namespace2"
+        
+        let box1: PandoraUserDefaultsBox<String> = Pandora.UserDefaults.box(namespace: namespace1)
+        let box2: PandoraUserDefaultsBox<String> = Pandora.UserDefaults.box(namespace: namespace2)
+        
+        // Add data to both namespaces
+        box1.put(key: "key1", value: "value1")
+        box2.put(key: "key2", value: "value2")
+        
+        // Verify data exists
+        let result1 = await box1.get("key1")
+        let result2 = await box2.get("key2")
+        XCTAssertEqual(result1, "value1")
+        XCTAssertEqual(result2, "value2")
+        
+        // When - clear only namespace1
+        Pandora.clearUserDefaults(for: namespace1)
+        
+        // Then - create new boxes to test clearing (memory will be empty)
+        let newBox1: PandoraUserDefaultsBox<String> = Pandora.UserDefaults.box(namespace: namespace1)
+        let newBox2: PandoraUserDefaultsBox<String> = Pandora.UserDefaults.box(namespace: namespace2)
+        
+        // namespace1 should be empty (cleared), namespace2 should still have data
+        let result3 = await newBox1.get("key1")
+        let result4 = await newBox2.get("key2")
+        XCTAssertNil(result3) // Data cleared for namespace1
+        XCTAssertEqual(result4, "value2") // Data still exists for namespace2
     }
 
     // MARK: - deleteAllLocalStorage (disk + UD + iCloud)

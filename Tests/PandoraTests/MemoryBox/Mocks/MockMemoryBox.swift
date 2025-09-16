@@ -50,21 +50,28 @@ final class MockMemoryBox<Key: Hashable & Sendable, Value: Sendable>: PandoraMem
         allSubjects.forEach { $0.send(nil) }
     }
 
-    override func publisher(for key: Key, emitInitial: Bool = true) -> AnyPublisher<Value?, Never> {
+    override func publisher(for key: Key) -> AnyPublisher<Value?, Never> {
+        let currentValue = mockLock.withLock { mockStorage[key] }
+        
+        return Publishers.Merge(
+            Just(currentValue).eraseToAnyPublisher(),
+            getOrCreateMockPublisher(for: key).dropFirst()
+        )
+        .eraseToAnyPublisher()
+    }
+    
+    private func getOrCreateMockPublisher(for key: Key) -> AnyPublisher<Value?, Never> {
         mockLock.lock()
         let subject: CurrentValueSubject<Value?, Never>
         if let subj = mockSubjects[key] {
             subject = subj
         } else {
-            subject = CurrentValueSubject<Value?, Never>(mockStorage[key])
+            subject = CurrentValueSubject<Value?, Never>(nil) // Start with nil
             mockSubjects[key] = subject
         }
+        let publisher = subject.eraseToAnyPublisher()
         mockLock.unlock()
         
-        if emitInitial {
-            return subject.eraseToAnyPublisher()
-        } else {
-            return subject.dropFirst().eraseToAnyPublisher()
-        }
+        return publisher
     }
 }

@@ -102,30 +102,35 @@ public class PandoraMemoryBox<Key: Hashable & Sendable, Value: Sendable>: Pandor
         removedSubject?.send(nil)
     }
 
-    public func publisher(for key: Key, emitInitial: Bool = true) -> AnyPublisher<Value?, Never> {
+    public func publisher(for key: Key) -> AnyPublisher<Value?, Never> {
+        let currentValue: Value? = lock.withLock {
+            if let entry = storage[key], !isEntryExpired(entry) {
+                return entry.value
+            } else {
+                return nil
+            }
+        }
+        
+        return Publishers.Merge(
+            Just(currentValue).eraseToAnyPublisher(),
+            getOrCreateMemoryPublisher(for: key).dropFirst()
+        )
+        .eraseToAnyPublisher()
+    }
+    
+    private func getOrCreateMemoryPublisher(for key: Key) -> AnyPublisher<Value?, Never> {
         lock.lock()
         let subject: CurrentValueSubject<Value?, Never>
         if let existing = subjects[key] {
             subject = existing
         } else {
-            let value: Value? = {
-                if let entry = storage[key], !isEntryExpired(entry) {
-                    return entry.value
-                } else {
-                    return nil
-                }
-            }()
-            subject = .init(value)
+            subject = .init(nil) // Start with nil, will be updated by put/remove
             subjects[key] = subject
         }
         let publisher = subject.eraseToAnyPublisher()
         lock.unlock()
         
-        if emitInitial {
-            return publisher
-        } else {
-            return publisher.dropFirst().eraseToAnyPublisher()
-        }
+        return publisher
     }
 
     public func clear() {

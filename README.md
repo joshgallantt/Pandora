@@ -11,7 +11,7 @@
 
 [![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange.svg?style=flat)](https://swift.org)
 [![SPM ready](https://img.shields.io/badge/SPM-ready-brightgreen.svg?style=flat-square)](https://swift.org/package-manager/)
-[![Coverage](https://img.shields.io/badge/Coverage-97.1%25-brightgreen.svg?style=flat)](#)
+[![Coverage](https://img.shields.io/badge/Coverage-98%2B%25-brightgreen.svg?style=flat)](#)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 [![Size](https://img.shields.io/badge/Package_Size-1.5MB-purple.svg?style=flat-square)](#)
 
@@ -59,7 +59,7 @@ A powerful, type-safe caching library for Swift that provides multiple storage s
 - Built on **Swift Concurrency** (`async/await`)  
 - **Actor isolation** for safe persistence without manual locks  
 - Generic, type-safe APIs  
-- **Combine** publishers for reactive data flow  
+- **Combine** publishers for reactive data flow with simplified API  
 
 ⚡ **Performance**
 - LRU eviction in memory & disk
@@ -283,8 +283,8 @@ cache.publisher(for: "current_user")
     }
     .store(in: &cancellables)
 
-// Observe only future changes (skip current value)
-cache.publisher(for: "current_user", emitInitial: false)
+// Observe changes (current value is always emitted)
+cache.publisher(for: "current_user")
     .compactMap { $0 }
     .sink { user in
         print("User changed: \(user.name)")
@@ -301,31 +301,41 @@ cache.publisher(for: "user_id")
         // Handle user details
     }
     .store(in: &cancellables)
+
+// Skip initial value if you only want future updates
+cache.publisher(for: "current_user")
+    .dropFirst() // Skip the immediate current value emission
+    .compactMap { $0 }
+    .sink { user in
+        print("User changed: \(user.name)")
+    }
+    .store(in: &cancellables)
 ```
 
-#### Publisher Options
+#### Publisher Behavior
 
-All Pandora publishers support an `emitInitial` parameter to control whether the current value is emitted immediately upon subscription:
+All Pandora publishers emit the current value immediately upon subscription, followed by any future changes:
 
-- `publisher(for: "key")` - Emits current value immediately (default behavior)
-- `publisher(for: "key", emitInitial: true)` - Explicitly emit current value
-- `publisher(for: "key", emitInitial: false)` - Only emit future changes
+- `publisher(for: "key")` - Emits current value immediately, then future changes
+- Use `.dropFirst()` if you only want to observe future changes, not the current value
 
 ### Cache Cleanup
 
 ```swift
-// Clear specific cache
-cache.clear()
-await diskCache.clear()
+// Clear specific cache instances
+memoryCache.clear()                    // Synchronous for MemoryBox
+await diskCache.clear()                // Asynchronous for DiskBox
+await hybridCache.clear()              // Asynchronous for HybridBox
+await userDefaultsCache.clear()        // Asynchronous for UserDefaultsBox
 
-// Remove all Pandora disk caches for this app
-Pandora.clearAllDiskData()
+// Clear specific namespaces
+Pandora.clearUserDefaults(for: "my_settings")    // Clear specific UserDefaults namespace
+Pandora.clearDiskData(for: "my_cache")           // Clear specific disk namespace
 
-// Remove all keys from this app's UserDefaults and iCloud KVS
-Pandora.clearUserDefaults()
-
-// Remove everything above (nuclear option)
-Pandora.deleteAllLocalStorage()
+// Clear all data
+Pandora.clearAllUserDefaults()         // Clear all Pandora UserDefaults data
+Pandora.clearAllDiskData()             // Clear all Pandora disk caches
+Pandora.deleteAllLocalStorage()        // Nuclear option - clear everything
 ```
 
 ## Thread Safety

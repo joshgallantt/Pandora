@@ -115,17 +115,13 @@ public final class PandoraUserDefaultsBox<Value: Codable & Sendable>: PandoraDef
     // MARK: - Publisher
     
     /// Returns a publisher that emits the current and future values for the specified key.
-    public func publisher(for key: String, emitInitial: Bool = true) -> AnyPublisher<Value?, Never> {
-        if emitInitial {
-            let currentValue = syncLock.withLock { memory.get(key) }
-            return Publishers.Merge(
-                Just(currentValue).eraseToAnyPublisher(),
-                memory.publisher(for: key, emitInitial: false)
-            )
-            .eraseToAnyPublisher()
-        } else {
-            return memory.publisher(for: key, emitInitial: false)
-        }
+    public func publisher(for key: String) -> AnyPublisher<Value?, Never> {
+        let currentValue = syncLock.withLock { memory.get(key) }
+        return Publishers.Merge(
+            Just(currentValue).eraseToAnyPublisher(),
+            memory.publisher(for: key).dropFirst()
+        )
+        .eraseToAnyPublisher()
     }
     
     // MARK: - Get
@@ -243,7 +239,7 @@ public final class PandoraUserDefaultsBox<Value: Codable & Sendable>: PandoraDef
     // MARK: - Clear
     
     /// Removes all keys in the current namespace from all storage layers.
-    public func clear() {
+    public func clear() async {
         let prefix = "\(namespace)."
         
         syncLock.withLock {

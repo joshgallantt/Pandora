@@ -141,7 +141,7 @@ final class PandoraHybridBoxTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 100_000_000)
 
         // When
-        box.clear()
+        await box.clear()
         try? await Task.sleep(nanoseconds: 100_000_000)
 
         // Then
@@ -208,16 +208,16 @@ final class PandoraHybridBoxTests: XCTestCase {
         XCTAssertNil(result)
     }
 
-    // MARK: - emitInitial Tests
+    // MARK: - Publisher Tests
 
-    func test_givenValueExists_whenPublisherWithEmitInitialTrue_thenEmitsCurrentValueImmediately() {
+    func test_givenValueExists_whenPublisher_thenEmitsCurrentValueImmediately() {
         // Given
         box.put(key: "test", value: "hello")
         let expectation = expectation(description: "Publisher emits current value")
         var received: [Value?] = []
 
         // When
-        box.publisher(for: "test", emitInitial: true)
+        box.publisher(for: "test")
             .sink { value in
                 received.append(value)
                 if received.count == 1 {
@@ -231,40 +231,16 @@ final class PandoraHybridBoxTests: XCTestCase {
         XCTAssertEqual(received, ["hello"])
     }
 
-    func test_givenValueExists_whenPublisherWithEmitInitialFalse_thenDoesNotEmitCurrentValue() {
+    func test_givenValueExists_whenPublisher_thenEmitsOnUpdate() {
         // Given
         box.put(key: "test", value: "hello")
-        let expectation = expectation(description: "Publisher does not emit current value")
+        let expectation = expectation(description: "Publisher emits on update")
         var received: [Value?] = []
 
-        // When
-        box.publisher(for: "test", emitInitial: false)
+        box.publisher(for: "test")
             .sink { value in
                 received.append(value)
-                // Should not be called immediately
-            }
-            .store(in: &cancellables)
-
-        // Wait a bit to ensure no immediate emission
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            expectation.fulfill()
-        }
-
-        // Then
-        wait(for: [expectation], timeout: 1)
-        XCTAssertTrue(received.isEmpty)
-    }
-
-    func test_givenValueExists_whenPublisherWithEmitInitialFalse_thenEmitsFutureUpdates() {
-        // Given
-        box.put(key: "test", value: "hello")
-        let expectation = expectation(description: "Publisher emits future updates")
-        var received: [Value?] = []
-
-        box.publisher(for: "test", emitInitial: false)
-            .sink { value in
-                received.append(value)
-                if received.count == 2 { // Should get "world", then nil
+                if received.count == 2 {
                     expectation.fulfill()
                 }
             }
@@ -272,20 +248,42 @@ final class PandoraHybridBoxTests: XCTestCase {
 
         // When
         box.put(key: "test", value: "world")
+
+        // Then
+        wait(for: [expectation], timeout: 1)
+        XCTAssertEqual(received, ["hello", "world"])
+    }
+
+    func test_givenValueExists_whenPublisher_thenEmitsOnRemoval() {
+        // Given
+        box.put(key: "test", value: "hello")
+        let expectation = expectation(description: "Publisher emits on removal")
+        var received: [Value?] = []
+
+        box.publisher(for: "test")
+            .sink { value in
+                received.append(value)
+                if received.count == 2 {
+                    expectation.fulfill()
+                }
+            }
+            .store(in: &cancellables)
+
+        // When
         box.remove("test")
 
         // Then
         wait(for: [expectation], timeout: 1)
-        XCTAssertEqual(received, ["world", nil])
+        XCTAssertEqual(received, ["hello", nil])
     }
 
-    func test_givenNoValue_whenPublisherWithEmitInitialTrue_thenEmitsNilImmediately() {
+    func test_givenNoValue_whenPublisher_thenEmitsNilImmediately() {
         // Given
         let expectation = expectation(description: "Publisher emits nil immediately")
         var received: [Value?] = []
 
         // When
-        box.publisher(for: "missing", emitInitial: true)
+        box.publisher(for: "missing")
             .sink { value in
                 received.append(value)
                 expectation.fulfill()
@@ -297,44 +295,25 @@ final class PandoraHybridBoxTests: XCTestCase {
         XCTAssertEqual(received, [nil])
     }
 
-    func test_givenNoValue_whenPublisherWithEmitInitialFalse_thenDoesNotEmitInitially() {
+    func test_givenNoValue_whenPublisher_thenEmitsOnValueAdded() {
         // Given
-        let expectation = expectation(description: "Publisher does not emit initially")
+        let expectation = expectation(description: "Publisher emits when value is added")
         var received: [Value?] = []
 
-        box.publisher(for: "missing", emitInitial: false)
+        box.publisher(for: "missing")
             .sink { value in
                 received.append(value)
-                // Should not be called initially
+                if received.count == 2 {
+                    expectation.fulfill()
+                }
             }
             .store(in: &cancellables)
 
-        // Wait to ensure no immediate emission
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            expectation.fulfill()
-        }
+        // When
+        box.put(key: "missing", value: "hello")
 
         // Then
         wait(for: [expectation], timeout: 1)
-        XCTAssertTrue(received.isEmpty)
-    }
-
-    func test_givenDefaultEmitInitial_whenPublisherCalled_thenEmitsCurrentValue() {
-        // Given
-        box.put(key: "default", value: "test")
-        let expectation = expectation(description: "Default behavior emits current value")
-        var received: [Value?] = []
-
-        // When (using default parameter)
-        box.publisher(for: "default")
-            .sink { value in
-                received.append(value)
-                expectation.fulfill()
-            }
-            .store(in: &cancellables)
-
-        // Then
-        wait(for: [expectation], timeout: 1)
-        XCTAssertEqual(received, ["test"])
+        XCTAssertEqual(received, [nil, "hello"])
     }
 }
